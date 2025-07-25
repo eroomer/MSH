@@ -1,0 +1,19 @@
+# Node modules
+client/node_modules/
+server/node_modules/
+
+# 빌드 결과물
+server/dist/
+client/dist/
+
+# 환경 변수
+client/.env
+server/.env
+
+# Vite
+client/.vite
+
+# 기타
+.DS_Store
+.env
+*.log
