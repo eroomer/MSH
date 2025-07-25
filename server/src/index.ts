@@ -3,6 +3,8 @@ import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import path from 'path';
+import dotenv from 'dotenv';
+dotenv.config(); // .env 파일을 로드함
 
 // express 앱과 http 서버 생성
 const app = express();
