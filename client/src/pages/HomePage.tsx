@@ -7,7 +7,7 @@ function HomePage() {
 
   const handleJoin = () => {
     if (roomId.trim()) {
-      navigate(`/call/${roomId}`);
+      navigate(`/game/${roomId}`);
     }
   };
 

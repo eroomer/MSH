@@ -2,18 +2,23 @@ import { useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { socket } from '../libs/socket';                // 소켓 전역 변수
 import { createPeerConnection } from '../libs/webrtc';  // WebRTC 연결 객체 생성
+import { drawVideoToCanvas } from '../libs/canvas/drawVideoToCanvas'; // Video -> Canvas 복사 함수
 //import { io } from 'socket.io-client';
 //const socket = io('http://localhost:3000'); // 서버 주소
 
-function CallPage() {
+function GamePage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
-  const myVideoRef = useRef<HTMLVideoElement>(null);    // 내 비디오 스트림
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null); // WebRTC 연결 객체
   const myStreamRef = useRef<MediaStream | null>(null);             // 내 캠/마이크 스트림 저장
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);            // 상대방 캠 표시용 <video>
-  const iceQueue: RTCIceCandidateInit[] = [];
+  const iceQueue: RTCIceCandidateInit[] = [];                       // ICE 후보 저장
+
+  const myVideoRef = useRef<HTMLVideoElement>(null);        // 내 비디오 스트림 
+  const myCanvasRef = useRef<HTMLCanvasElement>(null);      // 내 비디오 스트림을 복사본 + 효과 적용한 실제 표시 화면
+
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);    // 상대방 비디오 스트림
+  const remoteCanvasRef = useRef<HTMLCanvasElement>(null);  // 상대방 비디오 스트림을 복사본 + 효과 적용한 실제 표시 화면
 
   useEffect(() => {
     const startMedia = async () => {
@@ -130,7 +135,21 @@ function CallPage() {
       <video ref={myVideoRef} autoPlay muted playsInline style={{ width: '45%', marginRight: 10 }} />
       <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '45%' }} />
     </div>
+
+    // <div style={{ display: 'flex', width: '100%', height: '100vh' }}>
+    //   {/* 내 화면 (video + canvas) */}
+    //   <div style={{ flex: 1, backgroundColor: '#111', position: 'relative' }}>
+    //     <video ref={myVideoRef} autoPlay muted playsInline style={{ display: 'none' }} />
+    //     <canvas ref={myCanvasRef} width={640} height={480} style={{ width: '100%', height: '100%' }} />
+    //   </div>
+
+    //   {/* 상대 화면 (video + canvas) */}
+    //   <div style={{ flex: 1, backgroundColor: '#222', position: 'relative' }}>
+    //     <video ref={remoteVideoRef} autoPlay playsInline style={{ display: 'none' }} />
+    //     <canvas ref={remoteCanvasRef} width={640} height={480} style={{ width: '100%', height: '100%' }} />
+    //   </div>
+    // </div>
   );
 }
 
-export default CallPage;
+export default GamePage;
