@@ -46,8 +46,8 @@ function GamePage() {
         console.error('Media error:', err);
       }
     };
-
     startMedia();
+    
     socket.on('you-are-caller', async (peerId: string) => {
         console.log(`📡 당신은 caller, 당신의 peer는 ${peerId}`);
         if (peerConnectionRef.current) {
@@ -121,6 +121,16 @@ function GamePage() {
         if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
     });
 
+    if (myVideoRef.current && myCanvasRef.current) {
+      console.log('내 비디오 스트림 복사');
+      drawVideoToCanvas(myVideoRef.current, myCanvasRef.current);
+    }
+  
+    if (remoteVideoRef.current && remoteCanvasRef.current) {
+      console.log('상대 비디오 스트림 복사');
+      drawVideoToCanvas(remoteVideoRef.current, remoteCanvasRef.current);
+    }
+
     return () => {
       console.log('🧹 언마운트 및 정리');
       socket.disconnect();
@@ -132,23 +142,20 @@ function GamePage() {
   return (
     <div>
       <h2>📞 WebRTC Call - 방 ID: {roomId}</h2>
-      <video ref={myVideoRef} autoPlay muted playsInline style={{ width: '45%', marginRight: 10 }} />
-      <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '45%' }} />
+      <div style={{width: '100%', height: '100%', display: 'flex', flexDirection: 'row' }}>
+        {/* 내 화면 (video + canvas) */}
+        <div style={{ flex: 1, backgroundColor: '#111', position: 'relative' }}>
+          <h2>내 화면 <video ref={myVideoRef} autoPlay muted playsInline style={{ width: '1px', height: '1px', opacity: 0, pointerEvents: 'none'}} /> </h2>
+          <canvas ref={myCanvasRef} width={640} height={480} style={{ width: '100%', height: 'auto' }} />
+        </div>
+
+        {/* 상대 화면 (video + canvas) */}
+        <div style={{ flex: 1, backgroundColor: '#222', position: 'relative' }}>
+          <h2>상대 화면 <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '1px', height: '1px', opacity: 0, pointerEvents: 'none'}} /> </h2>
+          <canvas ref={remoteCanvasRef} width={640} height={480} style={{ width: '100%', height: 'auto' }} />
+        </div>
+      </div>
     </div>
-
-    // <div style={{ display: 'flex', width: '100%', height: '100vh' }}>
-    //   {/* 내 화면 (video + canvas) */}
-    //   <div style={{ flex: 1, backgroundColor: '#111', position: 'relative' }}>
-    //     <video ref={myVideoRef} autoPlay muted playsInline style={{ display: 'none' }} />
-    //     <canvas ref={myCanvasRef} width={640} height={480} style={{ width: '100%', height: '100%' }} />
-    //   </div>
-
-    //   {/* 상대 화면 (video + canvas) */}
-    //   <div style={{ flex: 1, backgroundColor: '#222', position: 'relative' }}>
-    //     <video ref={remoteVideoRef} autoPlay playsInline style={{ display: 'none' }} />
-    //     <canvas ref={remoteCanvasRef} width={640} height={480} style={{ width: '100%', height: '100%' }} />
-    //   </div>
-    // </div>
   );
 }
 

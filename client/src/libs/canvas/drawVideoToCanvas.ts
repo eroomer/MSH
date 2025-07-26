@@ -3,7 +3,9 @@ export function drawVideoToCanvas(video: HTMLVideoElement, canvas: HTMLCanvasEle
     if (!ctx) return;
   
     const loop = () => {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      if (video.readyState >= 2) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
       requestAnimationFrame(loop);
     };
   
