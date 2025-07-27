@@ -15,14 +15,14 @@ export function createPeerConnection(
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       const candidateInit = event.candidate.toJSON();
-      console.log('📤 client to client ICE 후보 전송:', { candidateInit });
+      console.log('📤 client to client ICE 후보 전송');
       socket.emit(SOCKET_EVENTS.C2C_ICE_CANDIDATE, { candidateInit });
     }
   };
 
   // 원격 스트림 수신
   pc.ontrack = (event) => {
-    console.log('📺 client to cleint WebRTC 수신된 스트림:', event.streams[0]);
+    console.log('📺 client to cleint WebRTC 수신된 스트림');
     onRemoteStream(event.streams[0]);
   };
 
@@ -37,7 +37,7 @@ export function createPeerConnection(
 
   // 로컬 스트림 등록
   stream.getTracks().forEach((track) => {
-    console.log('➕ client to cleint WebRTC 트랙 추가됨:', track);
+    console.log('➕ client to cleint WebRTC 트랙 추가됨');
     pc.addTrack(track, stream);
   });
 
@@ -59,7 +59,7 @@ export async function createServerConnection(
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       const candidateInit = event.candidate.toJSON();
-      console.log('📤 client to server ICE 후보 전송:');
+      console.log('📤 client to server ICE 후보 전송');
       socket.emit(SOCKET_EVENTS.C2S_ICE_CANDIDATE, { candidateInit });
     }
   };

@@ -33,7 +33,7 @@ function GamePage() {
     const startMedia = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); // 비디오/오디오 모두 포함된 full stream
-        console.log('🎥 내 스트림 획득됨:', stream);
+        console.log('🎥 내 스트림 획득됨:');
         myStreamRef.current = stream;
 
         if (myVideoRef.current) {
@@ -166,12 +166,12 @@ function GamePage() {
     }
     case SOCKET_EVENTS.C2C_OFFER: {
       const { offer } = payload as { offer: RTCSessionDescriptionInit };
-      console.log('📨 offer 수신:', offer);
+      console.log('📨 offer 수신');
       if (pcPeer.current) {
         await pcPeer.current.setRemoteDescription(offer);
         const answer = await pcPeer.current.createAnswer();
         await pcPeer.current.setLocalDescription(answer);
-        console.log('📤 answer 전송:', answer);
+        console.log('📤 answer 전송');
         socket.emit(SOCKET_EVENTS.C2C_ANSWER, { answer });
 
         for (const candidateInit of iceQueuePeer) {
@@ -183,7 +183,7 @@ function GamePage() {
     }
     case SOCKET_EVENTS.C2C_ANSWER: {
       const { answer } = payload as { answer: RTCSessionDescriptionInit };
-      console.log('📨 answer 수신:', answer);
+      console.log('📨 answer 수신');
       await pcPeer.current?.setRemoteDescription(answer);
 
       for (const candidateInit of iceQueuePeer) {
@@ -194,13 +194,13 @@ function GamePage() {
     }
     case SOCKET_EVENTS.C2C_ICE_CANDIDATE: {
       const { candidateInit } = payload as { candidateInit: RTCIceCandidateInit };
-      console.log('❄️ ICE 후보 수신:', candidateInit);
+      console.log('❄️ ICE 후보 수신');
       if (pcPeer.current?.remoteDescription) {
         await pcPeer.current.addIceCandidate(candidateInit);
-        console.log('❄️ ICE 후보 추가:', candidateInit);
+        console.log('❄️ ICE 후보 추가');
       } else {
         iceQueuePeer.push(candidateInit);
-        console.log('❄️ ICE 후보 큐에 저장:', candidateInit);
+        console.log('❄️ ICE 후보 큐에 저장');
       }
       break; 
     }
@@ -218,7 +218,7 @@ function GamePage() {
         break;
       case SOCKET_EVENTS.C2S_ANSWER: {
         const { answer } = payload as { answer: RTCSessionDescriptionInit };
-        console.log('📨 c2s answer 수신:', answer);
+        console.log('📨 c2s answer 수신');
         await pcServer.current?.setRemoteDescription(answer);
 
         for (const candidateInit of iceQueueServer) {
@@ -229,13 +229,13 @@ function GamePage() {
       }
       case SOCKET_EVENTS.C2S_ICE_CANDIDATE: {
         const { candidateInit } = payload as { candidateInit: RTCIceCandidateInit };
-        console.log('❄️ c2s ICE 후보 수신:', candidateInit);
+        console.log('❄️ c2s ICE 후보 수신');
         if (pcServer.current?.remoteDescription) {
           await pcServer.current.addIceCandidate(candidateInit);
-          console.log('❄️ c2s ICE 후보 추가:', candidateInit);
+          console.log('❄️ c2s ICE 후보 추가');
         } else {
           iceQueueServer.push(candidateInit);
-          console.log('❄️ c2s ICE 후보 큐에 저장:', candidateInit);
+          console.log('❄️ c2s ICE 후보 큐에 저장');
         }
         break; 
       }

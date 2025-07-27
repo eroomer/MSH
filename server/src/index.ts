@@ -1,5 +1,6 @@
 import express from 'express';
 import { Server as SocketIOServer, Socket } from 'socket.io';
+import { setupGpuWebSocket } from './gpuSocket';
 import { SOCKET_EVENTS } from '../../shared/socketEvents';
 import http from 'http';
 import cors from 'cors';
@@ -33,18 +34,8 @@ server.listen(PORT, () => {
   console.log(`🚀 서버 실행 중: http://localhost:${PORT}`);
 });
 
-// GPU WS (포트 3001 분리)
-// let gpuSock: WebSocket | null = null;
-// const wss = new WebSocketServer({ port: 3001 });
-// wss.on('connection', (ws: WebSocket) => {
-//   console.log('✅ GPU WS connected');
-//   gpuSock = ws;
-//   ws.on('message', (m) => {
-//     const { clientId, gaze, blink, frameId } = JSON.parse(m);
-//     io.to(clientId).emit('gpu-result', { gaze, blink, frameId });
-//   });
-//   ws.on('close', () => { console.warn('⚠️ GPU WS closed'); gpuSock = null; });
-// });
+// GPU WebSocket 연결 초기화
+setupGpuWebSocket(io); // gpuSocket.ts 파일로 분리
 
 // 오프셋 측정 함수
 const measureOffset = (sock: Socket): Promise<number> => {
@@ -201,9 +192,13 @@ async function handleC2SEvent(socket: Socket, event: string, payload: any) {
                 }
             };
         
-            // state.pcClient.ontrack = ({ track, streams }) => {
-            //     if (!state.pcGpu) createGpuPeer(state, socket.id, track, streams[0]);
-            // };
+            state.pcClient.ontrack = (event: RTCTrackEvent) => {
+                const { track, streams } = event;
+                if (!state.pcGpu) {
+                  createGpuPeer(state, socket.id, track, streams[0]);
+                  console.log('gpuPeer 생성됨');
+                }
+            };
         
             await state.pcClient.setRemoteDescription(offer);
             await state.pcClient.setLocalDescription(await state.pcClient.createAnswer());
@@ -226,31 +221,42 @@ async function handleC2SEvent(socket: Socket, event: string, payload: any) {
     }
 }
 
-// async function createGpuPeer(state, clientId, track, stream) {
-//     const pc = new RTCPeerConnection({ iceServers: STUN });
-//     state.pcGpu = pc;
-//     pc.addTrack(track, stream);
+interface GpuState {
+    pcGpu: RTCPeerConnection | null;
+    offset: number;
+}
+
+async function createGpuPeer(
+    state: GpuState,
+    clientId: string,
+    track: MediaStreamTrack,
+    stream: MediaStream
+  ): Promise<void> {
+    const pc = new RTCPeerConnection({ iceServers: STUN });
+    state.pcGpu = pc;
+    
+    pc.addTrack(track, stream);
   
-//     pc.onicecandidate = ({ candidate }) =>
-//         candidate && fetch(`${GPU_HTTP}/ice-candidate`, {
-//           method:'POST', headers:{ 'Content-Type':'application/json' },
-//           body:JSON.stringify({ clientId, candidate })
-//         });
+    pc.onicecandidate = ({ candidate }: RTCPeerConnectionIceEvent) =>
+        candidate && fetch(`${GPU_HTTP}/ice-candidate`, {
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body:JSON.stringify({ clientId, candidate })
+        });
   
-//     await pc.setLocalDescription(await pc.createOffer());
+    await pc.setLocalDescription(await pc.createOffer());
   
-//     const res = await fetch(`${GPU_HTTP}/connect`, {
-//       method:'POST', headers:{ 'Content-Type':'application/json' },
-//       body:JSON.stringify({
-//         clientId,
-//         offset: state.offset,
-//         sdp:    pc.localDescription?.sdp,
-//         type:   pc.localDescription?.type
-//       })
-//     });
-//     const { sdp, type } = await res.json();
-//     await pc.setRemoteDescription({ sdp, type });
+    const res = await fetch(`${GPU_HTTP}/connect`, {
+      method:'POST', headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify({
+        clientId,
+        offset: state.offset,
+        sdp:    pc.localDescription?.sdp,
+        type:   pc.localDescription?.type
+      })
+    });
+    const { sdp, type } = await res.json();
+    await pc.setRemoteDescription({ sdp, type });
   
-//     console.log('🔗 Hub-GPU peer ready');
-//     io.to(clientId).emit('ready');
-//   }
+    console.log('🔗 Hub-GPU peer ready');
+    io.to(clientId).emit('ready');
+  }
