@@ -1,5 +1,5 @@
 # MSH - 못난놈들은 서로 얼굴만 봐도 흥겹다
-
+세계최초 온라인 눈싸움 게임
 ## 구조
 - `client/`: React + Vite (WebRTC, socket.io-client)
 - `server/`: Express + TypeScript + Socket.io (signaling server)
