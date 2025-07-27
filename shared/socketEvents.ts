@@ -2,6 +2,8 @@ export const SOCKET_EVENTS = {
     ROOM_JOIN: 'room:join',
     ROOM_FULL: 'room:full',
     ROOM_PEER_LEFT: 'room:peerleft',
+    ROOM_PING: 'room:ping',
+    ROOM_PONG: 'room:pong',
 
     C2C_CALLER: 'c2c:caller',
     C2C_CALLEE: 'c2c:callee',
