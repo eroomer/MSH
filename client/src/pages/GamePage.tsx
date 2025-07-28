@@ -136,7 +136,7 @@ function GamePage() {
             }
             }
         );
-        console.log('🌐 WebRTC 연결 생성됨');
+        //console.log('🌐 client to cleintWebRTC 연결 생성됨');
         if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
         break;
       default:
@@ -222,20 +222,20 @@ function GamePage() {
         await pcServer.current?.setRemoteDescription(answer);
 
         for (const candidateInit of iceQueueServer) {
-          await pcPeer.current?.addIceCandidate(candidateInit);
+          await pcServer.current?.addIceCandidate(candidateInit);
         }
         iceQueueServer.length = 0;
         break;
       }
       case SOCKET_EVENTS.C2S_ICE_CANDIDATE: {
         const { candidateInit } = payload as { candidateInit: RTCIceCandidateInit };
-        console.log('❄️ c2s ICE 후보 수신');
+        //console.log('❄️ c2s ICE 후보 수신');
         if (pcServer.current?.remoteDescription) {
           await pcServer.current.addIceCandidate(candidateInit);
-          console.log('❄️ c2s ICE 후보 추가');
+          //console.log('❄️ c2s ICE 후보 추가');
         } else {
           iceQueueServer.push(candidateInit);
-          console.log('❄️ c2s ICE 후보 큐에 저장');
+          //console.log('❄️ c2s ICE 후보 큐에 저장');
         }
         break; 
       }

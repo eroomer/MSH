@@ -12,7 +12,7 @@ import { RTCPeerConnection, RTCIceCandidate} from '@koush/wrtc';
 // 세션 관리
 export const sessions = new Map();
 
-const PORT = process.env.PORT || 3000;
+const PORT     = process.env.PORT || 3000;
 const GPU_HTTP = 'http://localhost:5000';
 const STUN     = [{ urls:'stun:stun.l.google.com:19302' }];
 dotenv.config(); // .env 파일을 로드함
@@ -57,6 +57,40 @@ io.on('connection', async (socket) => {
     // 👉 먼저 빈 세션 등록
     sessions.set(socket.id, {});
     const state = sessions.get(socket.id);
+
+    state.pcClient = new RTCPeerConnection({ iceServers: STUN });
+    console.log('pcClient 생성');
+
+    state.pcClient.ontrack = (event: RTCTrackEvent) => {
+        console.log('pcClient 트랙 수신');
+        const { track, streams } = event;
+        if (!state.pcGpu) {
+            createGpuPeer(state, socket.id, track, streams[0]);
+            console.log('gpuPeer 생성됨');
+        }
+    };
+
+    state.pcClient.onconnectionstatechange = () => {
+        const conn = state.pcClient.connectionState;
+        console.log('📶 client to server WebRTC 연결 상태 변경:', conn);
+        if (conn === 'connected') {
+        console.log('✅ client to server WebRTC 연결 완료 (P2P 연결 성공)');
+        }
+    }
+
+    state.pcClient.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+        if (event.candidate) {
+          const candidate = event.candidate;
+          const candidateInit = {
+            candidate: candidate.candidate,
+            sdpMid: candidate.sdpMid,
+            sdpMLineIndex: candidate.sdpMLineIndex,
+            usernameFragment: candidate.usernameFragment, // 👈 여기 포함
+          };
+          console.log('📤 client to server ICE 후보 전송');
+          socket.emit(SOCKET_EVENTS.C2S_ICE_CANDIDATE, { candidateInit });
+        }
+    };
 
     socket.onAny((event, payload) => {
         handleSocketEvent(socket, event, payload);
@@ -176,29 +210,39 @@ async function handleC2SEvent(socket: Socket, event: string, payload: any) {
                 console.warn(`⚠️ 세션 정보 없음: ${socket.id}`);
                 return; // 또는 적절히 초기화해도 됨
               }
-            state.pcClient = new RTCPeerConnection({ iceServers: STUN });
+            // state.pcClient = new RTCPeerConnection({ iceServers: STUN });
+            // console.log('pcClient 생성');
 
-            state.pcClient.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-                if (event.candidate) {
-                  const candidate = event.candidate;
-                  const candidateInit = {
-                    candidate: candidate.candidate,
-                    sdpMid: candidate.sdpMid,
-                    sdpMLineIndex: candidate.sdpMLineIndex,
-                    usernameFragment: candidate.usernameFragment, // 👈 여기 포함
-                  };
-                  console.log('📤 client to server ICE 후보 전송');
-                  socket.emit(SOCKET_EVENTS.C2C_ICE_CANDIDATE, { candidateInit });
-                }
-            };
-        
-            state.pcClient.ontrack = (event: RTCTrackEvent) => {
-                const { track, streams } = event;
-                if (!state.pcGpu) {
-                  createGpuPeer(state, socket.id, track, streams[0]);
-                  console.log('gpuPeer 생성됨');
-                }
-            };
+            // state.pcClient.ontrack = (event: RTCTrackEvent) => {
+            //     console.log('pcClient 트랙 수신');
+            //     const { track, streams } = event;
+            //     if (!state.pcGpu) {
+            //       createGpuPeer(state, socket.id, track, streams[0]);
+            //       console.log('gpuPeer 생성됨');
+            //     }
+            // };
+
+            // state.pcClient.onconnectionstatechange = () => {
+            //     const conn = state.pcClient.connectionState;
+            //     console.log('📶 client to server WebRTC 연결 상태 변경:', conn);
+            //     if (conn === 'connected') {
+            //     console.log('✅ client to server WebRTC 연결 완료 (P2P 연결 성공)');
+            //     }
+            // }
+
+            // state.pcClient.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+            //     if (event.candidate) {
+            //       const candidate = event.candidate;
+            //       const candidateInit = {
+            //         candidate: candidate.candidate,
+            //         sdpMid: candidate.sdpMid,
+            //         sdpMLineIndex: candidate.sdpMLineIndex,
+            //         usernameFragment: candidate.usernameFragment, // 👈 여기 포함
+            //       };
+            //       console.log('📤 client to server ICE 후보 전송');
+            //       socket.emit(SOCKET_EVENTS.C2S_ICE_CANDIDATE, { candidateInit });
+            //     }
+            // };
         
             await state.pcClient.setRemoteDescription(offer);
             await state.pcClient.setLocalDescription(await state.pcClient.createAnswer());
