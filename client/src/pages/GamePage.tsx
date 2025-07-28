@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { socket } from '../libs/socket';           // 소켓 전역 변수
 import { SOCKET_EVENTS } from '../../../shared/socketEvents';
@@ -8,6 +8,9 @@ import { drawVideoToCanvas } from '../libs/canvas/drawVideoToCanvas'; // Video -
 function GamePage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+
+  const [gaze,  setGaze]  = useState([0, 0]);    // 시선위치
+  const [blink, setBlink] = useState(false);      // 감음?
 
   const pcPeer = useRef<RTCPeerConnection | null>(null);     // 상대 클라이언트와의 WebRTC 연결 객체
   const pcServer = useRef<RTCPeerConnection | null>(null);     // 서버와의 WebRTC 연결 객체
@@ -90,6 +93,11 @@ function GamePage() {
           <h2>내 화면 <video ref={myVideoRef} autoPlay muted playsInline style={{ width: '1px', height: '1px', opacity: 0, pointerEvents: 'none'}} /> </h2>
           <canvas ref={myCanvasRef} width={640} height={480} style={{ width: '100%', height: 'auto' }} />
         </div>
+        <div style={{ marginTop: 10 }}>
+            <>
+              gaze {gaze[0].toFixed(2)}, {gaze[1].toFixed(2)} / blink {blink ? '🙈' : '👀'}
+            </>
+          </div>
 
         {/* 상대 화면 (video + canvas) */}
         <div style={{ flex: 1, backgroundColor: '#222', position: 'relative' }}>
@@ -107,6 +115,8 @@ function GamePage() {
       handleC2CEvent(event, payload);
     } else if (event.startsWith('c2s:')) {
       handleC2SEvent(event, payload);
+    } else if (event.startsWith('gs:')) {
+      handleGSEvent(event, payload);
     } else {
       console.warn(`[⚠️ Unhandled Event] ${event}`);
     }
@@ -242,6 +252,20 @@ function GamePage() {
       default:
         console.warn(`[⚠️ Unhandled C2S Event] ${event}`);
         break;
+    }
+  }
+
+  function handleGSEvent(event: string, payload: any) {
+    switch (event) {
+      case SOCKET_EVENTS.GS_GAZE: {
+        const { gaze, blink } = payload as {
+          gaze: { x: number; y: number };
+          blink: boolean;
+        };
+        console.log(gaze.x, gaze.y, blink)
+        setGaze([gaze.x, gaze.y]);
+        setBlink(blink);
+      }
     }
   }
 }
