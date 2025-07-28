@@ -58,42 +58,8 @@ io.on('connection', async (socket) => {
     sessions.set(socket.id, {});
     const state = sessions.get(socket.id);
 
-    state.pcClient = new RTCPeerConnection({ iceServers: STUN });
-    console.log('pcClient 생성');
-
-    state.pcClient.ontrack = (event: RTCTrackEvent) => {
-        console.log('pcClient 트랙 수신');
-        const { track, streams } = event;
-        if (!state.pcGpu) {
-            createGpuPeer(state, socket.id, track, streams[0]);
-            console.log('gpuPeer 생성됨');
-        }
-    };
-
-    state.pcClient.onconnectionstatechange = () => {
-        const conn = state.pcClient.connectionState;
-        console.log('📶 client to server WebRTC 연결 상태 변경:', conn);
-        if (conn === 'connected') {
-        console.log('✅ client to server WebRTC 연결 완료 (P2P 연결 성공)');
-        }
-    }
-
-    state.pcClient.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-        if (event.candidate) {
-          const candidate = event.candidate;
-          const candidateInit = {
-            candidate: candidate.candidate,
-            sdpMid: candidate.sdpMid,
-            sdpMLineIndex: candidate.sdpMLineIndex,
-            usernameFragment: candidate.usernameFragment, // 👈 여기 포함
-          };
-          console.log('📤 client to server ICE 후보 전송');
-          socket.emit(SOCKET_EVENTS.C2S_ICE_CANDIDATE, { candidateInit });
-        }
-    };
-
-    socket.onAny((event, payload) => {
-        handleSocketEvent(socket, event, payload);
+    socket.onAny(async (event, payload) => {
+        await handleSocketEvent(socket, event, payload);
     });
 
     // time offset 측정 및 저장
@@ -104,9 +70,11 @@ io.on('connection', async (socket) => {
     socket.on('disconnect', () => {
         console.log(`❌ 연결 종료: ${socket.id}`);
         const state = sessions.get(socket.id);
-        state?.pcClient?.close();
-        state?.pcGpu?.close();
-        sessions.delete(socket.id);
+        // state?.pcClient?.close(); // 라이브러리 버그로 인해 서버가 멈추므로 주석 처리
+        // state?.pcGpu?.close();    // 라이브러리 버그로 인해 서버가 멈추므로 주석 처리
+        state.pcClient = null;
+        state.pcGpu = null;
+        sessions.delete(socket.id); // 가비지 컬렉터가 정리해주길 기도합시다
         const roomId = socket.data.roomId;
         if (roomId) {
             socket.to(roomId).emit(SOCKET_EVENTS.ROOM_PEER_LEFT);
@@ -115,13 +83,13 @@ io.on('connection', async (socket) => {
     });
 });
 
-function handleSocketEvent(socket: Socket, event: string, payload: any) {
+async function handleSocketEvent(socket: Socket, event: string, payload: any) {
     if (event.startsWith('room:')) {
         handleRoomEvent(socket, event, payload);
     } else if (event.startsWith('c2c:')) {
         handleC2CEvent(socket, event, payload);
     } else if (event.startsWith('c2s:')) {
-        handleC2SEvent(socket, event, payload);
+        await handleC2SEvent(socket, event, payload);
     } else {
         console.warn(`[⚠️ Unhandled Event] ${event}`);
     }
@@ -208,41 +176,53 @@ async function handleC2SEvent(socket: Socket, event: string, payload: any) {
             const state = sessions.get(socket.id);
             if (!state) {
                 console.warn(`⚠️ 세션 정보 없음: ${socket.id}`);
-                return; // 또는 적절히 초기화해도 됨
-              }
-            // state.pcClient = new RTCPeerConnection({ iceServers: STUN });
-            // console.log('pcClient 생성');
+                return;
+            }
 
-            // state.pcClient.ontrack = (event: RTCTrackEvent) => {
-            //     console.log('pcClient 트랙 수신');
-            //     const { track, streams } = event;
-            //     if (!state.pcGpu) {
-            //       createGpuPeer(state, socket.id, track, streams[0]);
-            //       console.log('gpuPeer 생성됨');
-            //     }
-            // };
+            if (state.pcClient) {
+                console.warn(`⚠️ 이미 pcClient가 존재함: ${socket.id}`);
+                state.pcClient.close(); // 기존 연결이 있다면 닫음
+            }
 
-            // state.pcClient.onconnectionstatechange = () => {
-            //     const conn = state.pcClient.connectionState;
-            //     console.log('📶 client to server WebRTC 연결 상태 변경:', conn);
-            //     if (conn === 'connected') {
-            //     console.log('✅ client to server WebRTC 연결 완료 (P2P 연결 성공)');
-            //     }
-            // }
+            state.pcClient = new RTCPeerConnection({ iceServers: STUN });
+            state.pcClientId = Date.now(); // 고유 ID로 타임스탬프 사용
+            const connectionId = state.pcClientId;
+            console.log(`pcClient 생성 [ID: ${connectionId}]`);
 
-            // state.pcClient.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-            //     if (event.candidate) {
-            //       const candidate = event.candidate;
-            //       const candidateInit = {
-            //         candidate: candidate.candidate,
-            //         sdpMid: candidate.sdpMid,
-            //         sdpMLineIndex: candidate.sdpMLineIndex,
-            //         usernameFragment: candidate.usernameFragment, // 👈 여기 포함
-            //       };
-            //       console.log('📤 client to server ICE 후보 전송');
-            //       socket.emit(SOCKET_EVENTS.C2S_ICE_CANDIDATE, { candidateInit });
-            //     }
-            // };
+            state.pcClient.ontrack = async (event: RTCTrackEvent) => {
+                try {
+                    console.log(`pcClient 트랙 수신 [ID: ${connectionId}]`);
+                    const { track, streams } = event;
+                    if (!state.pcGpu) {
+                        await createGpuPeer(state, socket.id, track, streams[0]);
+                        console.log(`gpuPeer 생성됨 [ID: ${connectionId}]`);
+                    }
+                } catch (error) {
+                    console.error(`[💥 ontrack Error] gpuPeer 생성 중 오류 발생 [ID: ${connectionId}]:`, error);
+                }
+            };
+
+            state.pcClient.onconnectionstatechange = () => {
+                const conn = state.pcClient.connectionState;
+                console.log(`📶 C2S WebRTC 연결 상태 변경 [ID: ${connectionId}]: ${conn}`);
+                if (conn === 'connected') {
+                console.log(`✅ C2S WebRTC 연결 완료 [ID: ${connectionId}] (P2P 연결 성공)`);
+                }
+            }
+
+            state.pcClient.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+                if (event.candidate) {
+                  const candidate = event.candidate;
+                  const candidateInit = {
+                    candidate: candidate.candidate,
+                    sdpMid: candidate.sdpMid,
+                    sdpMLineIndex: candidate.sdpMLineIndex,
+                    usernameFragment: candidate.usernameFragment,
+                  };
+                  console.log('📤 client to server ICE 후보 전송');
+                  socket.emit(SOCKET_EVENTS.C2S_ICE_CANDIDATE, { candidateInit });
+                }
+            };
         
             await state.pcClient.setRemoteDescription(offer);
             await state.pcClient.setLocalDescription(await state.pcClient.createAnswer());
@@ -259,7 +239,13 @@ async function handleC2SEvent(socket: Socket, event: string, payload: any) {
             console.log('📤 client to server ICE 후보 수신');
             const { candidateInit } = payload as { candidateInit: RTCIceCandidateInit };
             const state = sessions.get(socket.id);
-            state.pcClient.addIceCandidate(new RTCIceCandidate(candidateInit));
+            if (state && state.pcClient) {
+                try {
+                    await state.pcClient.addIceCandidate(new RTCIceCandidate(candidateInit));
+                } catch (err) {
+                    console.warn('ICE 후보 추가 실패:', err);
+                }
+            }
             break;
         }
     }

@@ -25,8 +25,8 @@ function GamePage() {
 
   useEffect(() => {
     // 소켓 이벤트 처리
-    const handler = (event: string, payload: any) => {
-      handleSocketEvent(event, payload);
+    const handler = async (event: string, payload: any) => {
+      await handleSocketEvent(event, payload);
     };
     socket.onAny(handler);
 
@@ -44,10 +44,6 @@ function GamePage() {
         socket.connect();
         socket.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId });
 
-        pcServer.current = await createServerConnection(
-          myVideoRef.current!, roiCanvasRef.current!, 
-        );
-      
         pcPeer.current = createPeerConnection(
             myStreamRef.current!,
             (remoteStream) => {
@@ -55,6 +51,10 @@ function GamePage() {
                 remoteVideoRef.current.srcObject = remoteStream;
               }
             }
+        );
+
+        pcServer.current = await createServerConnection(
+          myVideoRef.current!, roiCanvasRef.current!, 
         );
       } catch (err) {
         console.error('Media error:', err);
@@ -100,13 +100,13 @@ function GamePage() {
     </div>
   );
 
-  function handleSocketEvent(event: string, payload: any) {
+  async function handleSocketEvent(event: string, payload: any) {
     if (event.startsWith('room:')) {
       handleRoomEvent(event, payload);
     } else if (event.startsWith('c2c:')) {
-      handleC2CEvent(event, payload);
+      await handleC2CEvent(event, payload);
     } else if (event.startsWith('c2s:')) {
-      handleC2SEvent(event, payload);
+      await handleC2SEvent(event, payload);
     } else {
       console.warn(`[⚠️ Unhandled Event] ${event}`);
     }
@@ -247,5 +247,3 @@ function GamePage() {
 }
 
 export default GamePage;
-
-
