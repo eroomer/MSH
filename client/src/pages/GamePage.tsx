@@ -97,10 +97,10 @@ function GamePage() {
           <canvas ref={myCanvasRef} width={640} height={480} style={{ width: '100%', height: 'auto' }} />
         </div>
         <div style={{ marginTop: 10 }}>
-            <>
-              gaze {gaze[0].toFixed(2)}, {gaze[1].toFixed(2)} / blink {blink ? '🙈' : '👀'}
-            </>
-          </div>
+          <>
+            gaze {gaze[0].toFixed(2)}, {gaze[1].toFixed(2)} / blink {blink ? '🙈' : '👀'}
+          </>
+        </div>
 
         {/* 상대 화면 (video + canvas) */}
         <div style={{ flex: 1, backgroundColor: '#222', position: 'relative' }}>
@@ -118,6 +118,8 @@ function GamePage() {
       await handleC2CEvent(event, payload);
     } else if (event.startsWith('c2s:')) {
       await handleC2SEvent(event, payload);
+    } else if (event.startsWith('gs:')) {
+      await handleGSEvent(event, payload);
     } else {
       console.warn(`[⚠️ Unhandled Event] ${event}`);
     }
