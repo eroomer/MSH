@@ -3,7 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Server as IOServer } from 'socket.io';
 
 interface GpuMessage {
-  clientId: string;
+  socketId: string;
   gaze: any;
   blink: boolean;
   frameId: number;
@@ -21,9 +21,9 @@ export function setupGpuWebSocket(io: IOServer) {
     ws.on('message', (data: string | Buffer) => {
       try {
         const parsed: GpuMessage = JSON.parse(data.toString());
-        const { clientId, gaze, blink, frameId } = parsed;
+        const { socketId, gaze, blink, frameId } = parsed;
 
-        io.to(clientId).emit('gs:gaze', { gaze, blink, frameId });
+        io.to(socketId).emit('gs:gaze', { gaze, blink, frameId });
       } catch (err) {
         console.error('❌ Failed to parse GPU message:', err);
       }

@@ -12,7 +12,7 @@ from aiortc import (
 # ────── settings ─────────────────────────────────────────────────────
 STUN_URL      = "stun:stun.l.google.com:19302"
 HTTP_PORT     = 5000                     # /connect, /ice-candidate
-HUB_WS_URL    = "ws://172.20.12.102:3001"    # Hub WS (포트 3001 분리)
+HUB_WS_URL    = "ws://localhost:3001"    # Hub WS (포트 3001 분리)
 
 # ────── globals ──────────────────────────────────────────────────────
 stun_cfg  = RTCConfiguration(iceServers=[RTCIceServer(urls=STUN_URL)])
@@ -27,7 +27,7 @@ async def send_result(cid: str, fid: int):
     if not hub:
         return                                # 아직 Hub에 안 붙었으면 skip
     payload = {
-        "clientId":  cid,
+        "socketId":  cid,
         "frameId":   fid,
         "timestamp": int(time.time() * 1000),
         "gaze":      {"x": override["x"], "y": override["y"]},
@@ -53,7 +53,7 @@ class Receiver(VideoStreamTrack):
 # ────── HTTP handlers ────────────────────────────────────────────────
 async def http_connect(request):
     body = await request.json()
-    cid, sdp, typ = body["clientId"], body["sdp"], body.get("type", "offer")
+    cid, sdp, typ = body["socketId"], body["sdp"], body.get("type", "offer")
 
     pc = RTCPeerConnection(configuration=stun_cfg)
     pcs[cid] = pc

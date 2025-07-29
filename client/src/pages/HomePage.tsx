@@ -1,25 +1,27 @@
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useUser } from '../contexts/UserContext';
 
 function HomePage() {
-  const [roomId, setRoomId] = useState('');
+  const { username, setUsername } = useUser();
   const navigate = useNavigate();
 
-  const handleJoin = () => {
-    if (roomId.trim()) {
-      navigate(`/game/${roomId}`);
+  const handleStart = () => {
+    if (!username.trim()) {
+      alert('이름을 입력해주세요!');
+      return;
     }
+    navigate(`/lobby`);
   };
 
   return (
     <div style={{ padding: 40 }}>
-      <h1>📞 MSH - WebRTC 데모</h1>
+      <h1>MSH - 여기는 홈 페이지</h1>
       <input
-        placeholder="방 ID 입력"
-        value={roomId}
-        onChange={(e) => setRoomId(e.target.value)}
+        placeholder="이름 입력"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
       />
-      <button onClick={handleJoin}>방 참가</button>
+      <button onClick={handleStart}>접속 하기</button>
     </div>
   );
 }

@@ -5,6 +5,10 @@ export const SOCKET_EVENTS = {
     ROOM_PING: 'room:ping',
     ROOM_PONG: 'room:pong',
 
+    CALI_JOIN: 'cali:join',
+    CALI_WELCOME: 'cali:welcome',
+    CALI_START: 'cali:start',
+
     C2C_CALLER: 'c2c:caller',
     C2C_CALLEE: 'c2c:callee',
     C2C_OFFER: 'c2c:offer',

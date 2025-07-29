@@ -13,7 +13,7 @@ import { RTCPeerConnection, RTCIceCandidate} from '@koush/wrtc';
 export const sessions = new Map();
 
 const PORT     = process.env.PORT || 3000;
-const GPU_HTTP = 'http://172.20.12.102:5000';
+const GPU_HTTP = 'http://localhost:5000';
 const STUN     = [{ urls:'stun:stun.l.google.com:19302' }];
 dotenv.config(); // .env 파일을 로드함
 
@@ -86,6 +86,8 @@ io.on('connection', async (socket) => {
 async function handleSocketEvent(socket: Socket, event: string, payload: any) {
     if (event.startsWith('room:')) {
         handleRoomEvent(socket, event, payload);
+    } else if (event.startsWith('cali:')) {
+        handleCaliEvent(socket, event, payload);
     } else if (event.startsWith('c2c:')) {
         handleC2CEvent(socket, event, payload);
     } else if (event.startsWith('c2s:')) {
@@ -133,6 +135,20 @@ function handleRoomEvent(socket: Socket, event: string, payload: any) {
         case SOCKET_EVENTS.ROOM_PEER_LEFT:
             // 서버는 할 거 없음.
             break;
+    }
+}
+
+function handleCaliEvent(socket: Socket, event: string, payload: any) {
+    switch (event) {
+        case SOCKET_EVENTS.CALI_JOIN: {
+            const { username } = payload as { username: string };
+            console.log(`유저 ${username} cali-join`);
+            socket.emit(SOCKET_EVENTS.CALI_WELCOME);
+        }
+        case SOCKET_EVENTS.CALI_START: {
+            const { username } = payload as { username: string };
+            console.log(`유저 ${username} cali-start`);
+        }
     }
 }
 
@@ -202,13 +218,13 @@ async function handleC2SEvent(socket: Socket, event: string, payload: any) {
                 }
             };
 
-            state.pcClient.onconnectionstatechange = () => {
-                const conn = state.pcClient.connectionState;
-                console.log(`📶 C2S WebRTC 연결 상태 변경 [ID: ${connectionId}]: ${conn}`);
-                if (conn === 'connected') {
-                console.log(`✅ C2S WebRTC 연결 완료 [ID: ${connectionId}] (P2P 연결 성공)`);
-                }
-            }
+            // state.pcClient.onconnectionstatechange = () => {
+            //     const conn = state.pcClient.connectionState;
+            //     console.log(`📶 C2S WebRTC 연결 상태 변경 [ID: ${connectionId}]: ${conn}`);
+            //     if (conn === 'connected') {
+            //     console.log(`✅ C2S WebRTC 연결 완료 [ID: ${connectionId}] (P2P 연결 성공)`);
+            //     }
+            // }
 
             state.pcClient.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
                 if (event.candidate) {
@@ -258,7 +274,7 @@ interface GpuState {
 
 async function createGpuPeer(
     state: GpuState,
-    clientId: string,
+    socketId: string,
     track: MediaStreamTrack,
     stream: MediaStream
   ): Promise<void> {
@@ -270,7 +286,7 @@ async function createGpuPeer(
     pc.onicecandidate = ({ candidate }: RTCPeerConnectionIceEvent) =>
         candidate && fetch(`${GPU_HTTP}/ice-candidate`, {
           method:'POST', headers:{ 'Content-Type':'application/json' },
-          body:JSON.stringify({ clientId, candidate })
+          body:JSON.stringify({ socketId, candidate })
         });
   
     await pc.setLocalDescription(await pc.createOffer());
@@ -278,7 +294,7 @@ async function createGpuPeer(
     const res = await fetch(`${GPU_HTTP}/connect`, {
       method:'POST', headers:{ 'Content-Type':'application/json' },
       body:JSON.stringify({
-        clientId,
+        socketId,
         offset: state.offset,
         sdp:    pc.localDescription?.sdp,
         type:   pc.localDescription?.type
@@ -288,5 +304,5 @@ async function createGpuPeer(
     await pc.setRemoteDescription({ sdp, type });
   
     console.log('🔗 Hub-GPU peer ready');
-    io.to(clientId).emit('ready');
+    io.to(socketId).emit('ready');
   }
