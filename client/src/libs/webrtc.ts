@@ -59,7 +59,7 @@ export async function createServerConnection(
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       const candidateInit = event.candidate.toJSON();
-      //console.log('📤 client to server ICE 후보 전송');
+      console.log('📤 client to server ICE 후보 전송');
       socket.emit(SOCKET_EVENTS.C2S_ICE_CANDIDATE, { candidateInit });
     }
   };
@@ -71,6 +71,10 @@ export async function createServerConnection(
     if (state === 'connected') {
       console.log('✅ client to server WebRTC 연결 완료 (P2P 연결 성공)');
     }
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    console.log('ICE 상태:', pc.iceConnectionState);
   };
 
   await startCapture(pc, dc, videoEl, canvasEl);
