@@ -13,7 +13,7 @@ import { RTCPeerConnection, RTCIceCandidate} from '@koush/wrtc';
 export const sessions = new Map();
 
 const PORT     = process.env.PORT || 3000;
-const GPU_HTTP = 'http://localhost:5000';
+const GPU_HTTP = 'http://172.20.12.102:5000';
 const STUN     = [{ urls:'stun:stun.l.google.com:19302' }];
 dotenv.config(); // .env 파일을 로드함
 

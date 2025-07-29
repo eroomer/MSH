@@ -50,6 +50,8 @@ function GamePage() {
         pcServer.current = await createServerConnection(
           myVideoRef.current!, roiCanvasRef.current!, 
         );
+
+        
       
         pcPeer.current = createPeerConnection(
             myStreamRef.current!,
@@ -86,7 +88,10 @@ function GamePage() {
 
   return (
     <div>
-      <h2>📞 WebRTC Call - 방 ID: {roomId} <canvas ref={roiCanvasRef} style={{ position: 'absolute', width: '0px', height: '0px', opacity: 0, pointerEvents: 'none'}} /></h2>
+      <h2>📞 WebRTC Call - 방 ID: {roomId}  
+        <canvas ref={roiCanvasRef} width={256} height={256}
+        style={{ position:'absolute',width:0,height:0,opacity:0 }} />
+      </h2>
       <div style={{width: '100%', height: '100%', display: 'flex', flexDirection: 'row' }}>
         {/* 내 화면 (video + canvas) */}
         <div style={{ flex: 1, backgroundColor: '#111', position: 'relative' }}>

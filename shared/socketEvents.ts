@@ -14,5 +14,7 @@ export const SOCKET_EVENTS = {
     C2S_OFFER: 'c2s:offer',
     C2S_ANSWER: 'c2s:answer',
     C2S_ICE_CANDIDATE: 'c2s:ice-candidate',
+
+    GS_GAZE: 'gs:gaze',
     // ... 필요에 따라 추가
   } as const;

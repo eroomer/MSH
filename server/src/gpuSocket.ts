@@ -23,7 +23,7 @@ export function setupGpuWebSocket(io: IOServer) {
         const parsed: GpuMessage = JSON.parse(data.toString());
         const { clientId, gaze, blink, frameId } = parsed;
 
-        io.to(clientId).emit('gpu-result', { gaze, blink, frameId });
+        io.to(clientId).emit('gs:gaze', { gaze, blink, frameId });
       } catch (err) {
         console.error('❌ Failed to parse GPU message:', err);
       }

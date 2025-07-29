@@ -12,7 +12,7 @@ from aiortc import (
 # ────── settings ─────────────────────────────────────────────────────
 STUN_URL      = "stun:stun.l.google.com:19302"
 HTTP_PORT     = 5000                     # /connect, /ice-candidate
-HUB_WS_URL    = "ws://localhost:3001"    # Hub WS (포트 3001 분리)
+HUB_WS_URL    = "ws://172.20.12.102:3001"    # Hub WS (포트 3001 분리)
 
 # ────── globals ──────────────────────────────────────────────────────
 stun_cfg  = RTCConfiguration(iceServers=[RTCIceServer(urls=STUN_URL)])
