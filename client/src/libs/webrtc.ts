@@ -97,7 +97,7 @@ async function startCapture(pc: RTCPeerConnection, videoEl: HTMLVideoElement, ca
   };
   draw();
 
-  const cStream = canvasEl.captureStream(30);
+  const cStream = canvasEl.captureStream(15);
   cStream.getTracks().forEach((track) => {
     console.log(`[${socket.id}]➕ client to server WebRTC 트랙 추가됨: ${cStream}`);
     pc.addTrack(track, cStream);
