@@ -159,10 +159,12 @@ function handleCaliEvent(socket: Socket, event: string, payload: any) {
             const { username } = payload as { username: string };
             console.log(`[${socket.id}] CALI_JOIN 수신, 유저 ${username}`);
             socket.emit(SOCKET_EVENTS.CALI_WELCOME);
+            break;
         }
         case SOCKET_EVENTS.CALI_START: {
             const { username } = payload as { username: string };
             console.log(`[${socket.id}] CALI_START 수신, 유저 ${username}`);
+            break;
         }
     }
 }

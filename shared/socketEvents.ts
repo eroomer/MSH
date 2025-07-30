@@ -25,5 +25,12 @@ export const SOCKET_EVENTS = {
     C2G_ICE_CANDIDATE: 'c2g:ice-candidate',
 
     GS_GAZE: 'gs:gaze',
+
+    STATE_CALI: 'st:cali',
+    STATE_DEFAULT: 'st:default',
+    STATE_READY: 'st:ready',
+    STATE_GAME: 'st:game',
+    STATE_WIN: 'st:win',
+    STATE_LOSE: 'st:lose',
     // ... 필요에 따라 추가
   } as const;

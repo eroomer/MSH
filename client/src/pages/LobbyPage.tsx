@@ -15,12 +15,52 @@ function LobbyPage() {
     navigate(`/cali`);
   };
 
+  const buttonStyle: React.CSSProperties = {
+    padding: '12px 20px',
+    fontSize: '1rem',
+    borderRadius: '8px',
+    border: 'none',
+    cursor: 'pointer',
+    backgroundColor: '#6366f1',
+    color: 'white',
+    transition: 'all 0.2s',
+  };
+
   return (
-    <div style={{ padding: 40 }}>
-      <h1>여기는 로비 페이지</h1>
-      <button onClick={handleJoin}>게임하기</button>
-      <button >게임 안하기</button>
-      <button onClick={handleCali}>캘리브레이션</button>
+    <div
+      style={{
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: '20px',
+      }}
+    >
+      <h1 style={{ fontSize: '2.5rem', color: '#fff' }}>🎮 여기는 로비 페이지</h1>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <button
+          onClick={handleJoin}
+          style={buttonStyle}
+        >
+          🚀 게임하기
+        </button>
+
+        <button
+          onClick={() => alert('진짜 안 할 거야? 😢')}
+          style={buttonStyle}
+        >
+          ❌ 게임 안하기
+        </button>
+
+        <button
+          onClick={handleCali}
+          style={buttonStyle}
+        >
+          🎯 캘리브레이션
+        </button>
+      </div>
     </div>
   );
 }

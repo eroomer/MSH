@@ -99,37 +99,84 @@ function GamePage() {
   }, [roomId]);
 
   const startbutton = () => {
+    console.log('버튼 누름');
     socket.emit(SOCKET_EVENTS.STATE_READY);
   };
 
   return (
-    <div>
-      <h2>📞 WebRTC Call - 방 ID: {roomId}  
-        <canvas ref={roiCanvasRef} width={256} height={256}
-        style={{ position:'absolute',width:0,height:0,opacity:0 }} />
+    <div style={{ height: '100vh', padding: '20px', boxSizing: 'border-box', backgroundColor: '#1e1e1e' }}>
+      <h2 style={{ color: 'white', textAlign: 'center', marginBottom: '20px' }}>
+        📞 WebRTC Call - 방 ID: {roomId}
+        <canvas ref={roiCanvasRef} width={256} height={256} style={{ position: 'absolute', width: 0, height: 0, opacity: 0 }} />
       </h2>
-      <div style={{width: '100%', height: '100%', display: 'flex', flexDirection: 'row' }}>
-        {/* 내 화면 (video + canvas) */}
-        <div style={{ flex: 1, backgroundColor: '#111', position: 'relative' }}>
-          <h2>내 화면 <video ref={myVideoRef} autoPlay muted playsInline style={{ width: '1px', height: '1px', opacity: 0, pointerEvents: 'none'}} /> </h2>
-          <canvas ref={myCanvasRef} width={640} height={480} style={{ width: '100%', height: 'auto' }} />
-        </div>
-        <div style={{ marginTop: 10 }}>
-        <button onClick={startbutton}>
-          READY
-        </button>
-          <>
-            gaze {gaze[0].toFixed(2)}, {gaze[1].toFixed(2)} / blink {blink ? '🙈' : '👀'}
-          </>
-          <>
-            gazeRaw {gazeRaw[0].toFixed(2)}, {gazeRaw[1].toFixed(2)} / blink {blink ? '🙈' : '👀'}
-          </>
+
+      <div style={{
+        width: '100%',
+        height: 'calc(100% - 80px)',
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '16px',
+      }}>
+        {/* 내 화면 */}
+        <div style={{
+          flex: 1,
+          backgroundColor: '#111',
+          borderRadius: '8px',
+          padding: '8px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}>
+          <h2 style={{ color: 'white' }}>내 화면</h2>
+          <video ref={myVideoRef} autoPlay muted playsInline style={{ width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }} />
+          <canvas ref={myCanvasRef} width={640} height={480} style={{ width: '100%', height: 'auto', borderRadius: '8px' }} />
         </div>
 
-        {/* 상대 화면 (video + canvas) */}
-        <div style={{ flex: 1, backgroundColor: '#222', position: 'relative' }}>
-          <h2>상대 화면 <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '1px', height: '1px', opacity: 0, pointerEvents: 'none'}} /> </h2>
-          <canvas ref={remoteCanvasRef} width={640} height={480} style={{ width: '100%', height: 'auto' }} />
+        {/* 중앙 영역 (버튼 + 디버그 정보) */}
+        <div style={{
+          width: '220px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '16px',
+          padding: '16px',
+          backgroundColor: '#2a2a2a',
+          borderRadius: '12px',
+        }}>
+          <button onClick={startbutton} style={{
+            padding: '10px 20px',
+            borderRadius: '8px',
+            border: 'none',
+            backgroundColor: '#4f46e5',
+            color: 'white',
+            fontSize: '1rem',
+            cursor: 'pointer',
+          }}>
+            READY
+          </button>
+          <div style={{ color: 'white', fontSize: '0.9rem', textAlign: 'center' }}>
+            gaze: {gaze[0].toFixed(2)}, {gaze[1].toFixed(2)}<br />
+            blink: {blink ? '🙈' : '👀'}<br />
+            raw: {gazeRaw[0].toFixed(2)}, {gazeRaw[1].toFixed(2)}
+          </div>
+        </div>
+
+        {/* 상대 화면 */}
+        <div style={{
+          flex: 1,
+          backgroundColor: '#222',
+          borderRadius: '8px',
+          padding: '8px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}>
+          <h2 style={{ color: 'white' }}>상대 화면</h2>
+          <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }} />
+          <canvas ref={remoteCanvasRef} width={640} height={480} style={{ width: '100%', height: 'auto', borderRadius: '8px' }} />
         </div>
       </div>
     </div>
