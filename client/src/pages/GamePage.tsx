@@ -13,6 +13,8 @@ function GamePage() {
   const [gazeRaw,  setGazeRaw]  = useState([0, 0]);    // 시선위치
   const [blink, setBlink] = useState(false);      // 감음?
 
+  const [gameState, setGameState] = useState<'waiting' | 'ready' | 'game' | 'win' | 'lose'>('waiting'); // 게임 state
+
   const pcPeer = useRef<RTCPeerConnection | null>(null);     // 상대 클라이언트와의 WebRTC 연결 객체
   const pcGPU = useRef<RTCPeerConnection | null>(null);     // GPU와의 WebRTC 연결 객체
   const myStreamRef = useRef<MediaStream | null>(null);          // 내 캠/마이크 스트림 저장
@@ -98,9 +100,10 @@ function GamePage() {
     };
   }, [roomId]);
 
-  const startbutton = () => {
-    console.log('버튼 누름');
+  const readybutton = () => {
+    console.log('레디 함');
     socket.emit(SOCKET_EVENTS.STATE_READY);
+    setGameState('ready');
   };
 
   return (
@@ -146,18 +149,25 @@ function GamePage() {
           backgroundColor: '#2a2a2a',
           borderRadius: '12px',
         }}>
-          <button onClick={startbutton} style={{
+          <button onClick={readybutton} disabled={gameState !== 'waiting'} style={{
             padding: '10px 20px',
             borderRadius: '8px',
             border: 'none',
-            backgroundColor: '#4f46e5',
+            backgroundColor: gameState !== 'waiting' ? '#888' : '#4f46e5',
             color: 'white',
             fontSize: '1rem',
-            cursor: 'pointer',
+            cursor: gameState !== 'waiting' ? 'not-allowed' : 'pointer',
+            opacity: gameState !== 'waiting' ? 0.6 : 1,
           }}>
             READY
           </button>
           <div style={{ color: 'white', fontSize: '0.9rem', textAlign: 'center' }}>
+            {gameState === 'waiting' && '🕓 대기 중'}
+            {gameState === 'ready'   && '✅ 준비 완료!'}
+            {gameState === 'game'    && '🎮 게임 중...'}
+            {gameState === 'win'     && '🏆 승리!'}
+            {gameState === 'lose'    && '💀 패배...'}
+          <br />
             gaze: {gaze[0].toFixed(2)}, {gaze[1].toFixed(2)}<br />
             blink: {blink ? '🙈' : '👀'}<br />
             raw: {gazeRaw[0].toFixed(2)}, {gazeRaw[1].toFixed(2)}
@@ -191,6 +201,8 @@ function GamePage() {
       await handleC2GEvent(event, payload);
     } else if (event.startsWith('gs:')) {
       await handleGSEvent(event, payload);
+    } else if (event.startsWith('st:')) {
+      await handleStateEvent(event, payload);
     } else {
       console.warn(`[⚠️ Unhandled Event] ${event}`);
     }
@@ -344,7 +356,26 @@ function GamePage() {
       }
     }
   }
+  
+  function handleStateEvent(event: string, payload: any) {
+    switch (event) {
+      case SOCKET_EVENTS.STATE_GAME:
+        console.log('state game 수신');
+        setGameState('game');
+        break;
+      case SOCKET_EVENTS.STATE_WIN:
+        console.log('state win 수신');
+        setGameState('win');
+        break;
+      case SOCKET_EVENTS.STATE_LOSE:
+        console.log('state lose 수신');
+        setGameState('lose');
+        break;
+    }
+  }
 }
+
+
 
 export default GamePage;
 
