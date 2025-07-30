@@ -10,6 +10,7 @@ function GamePage() {
   const navigate = useNavigate();
 
   const [gaze,  setGaze]  = useState([0, 0]);    // 시선위치
+  const [gazeRaw,  setGazeRaw]  = useState([0, 0]);    // 시선위치
   const [blink, setBlink] = useState(false);      // 감음?
 
   const pcPeer = useRef<RTCPeerConnection | null>(null);     // 상대 클라이언트와의 WebRTC 연결 객체
@@ -99,6 +100,9 @@ function GamePage() {
         <div style={{ marginTop: 10 }}>
           <>
             gaze {gaze[0].toFixed(2)}, {gaze[1].toFixed(2)} / blink {blink ? '🙈' : '👀'}
+          </>
+          <>
+            gazeRaw {gazeRaw[0].toFixed(2)}, {gazeRaw[1].toFixed(2)} / blink {blink ? '🙈' : '👀'}
           </>
         </div>
 
@@ -261,12 +265,14 @@ function GamePage() {
   function handleGSEvent(event: string, payload: any) {
     switch (event) {
       case SOCKET_EVENTS.GS_GAZE: {
-        const { gaze, blink } = payload as {
+        const { gaze, blink, gazeRaw } = payload as {
           gaze: { x: number; y: number };
           blink: boolean;
+          gazeRaw: { x: number; y: number };
         };
-        console.log(gaze.x, gaze.y, blink)
+        console.log(gaze.x, gaze.y, blink);
         setGaze([gaze.x, gaze.y]);
+        setGazeRaw([gazeRaw.x, gazeRaw.y]);
         setBlink(blink);
       }
     }
