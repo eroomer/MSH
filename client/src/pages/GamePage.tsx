@@ -14,6 +14,7 @@ function GamePage() {
   const [blink, setBlink] = useState(false);      // 감음?
 
   const [gameState, setGameState] = useState<'waiting' | 'ready' | 'game' | 'win' | 'lose'>('waiting'); // 게임 state
+  const [countdown, setCountdown] = useState<number | null>(null); // null이면 표시 안함
 
   const pcPeer = useRef<RTCPeerConnection | null>(null);     // 상대 클라이언트와의 WebRTC 연결 객체
   const pcGPU = useRef<RTCPeerConnection | null>(null);     // GPU와의 WebRTC 연결 객체
@@ -189,6 +190,20 @@ function GamePage() {
           <canvas ref={remoteCanvasRef} width={640} height={480} style={{ width: '100%', height: 'auto', borderRadius: '8px' }} />
         </div>
       </div>
+      {countdown !== null && (
+        <div style={{
+          position: 'absolute',
+          top: '40%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          fontSize: '5rem',
+          color: 'white',
+          fontWeight: 'bold',
+          zIndex: 1000,
+        }}>
+          {countdown}
+        </div>
+      )}
     </div>
   );
 
@@ -361,7 +376,20 @@ function GamePage() {
     switch (event) {
       case SOCKET_EVENTS.STATE_GAME:
         console.log('state game 수신');
+        setCountdown(3);
         setGameState('game');
+
+        let seconds = 3;
+        const interval = setInterval(() => {
+          seconds--;
+          if (seconds > 0) {
+            setCountdown(seconds);
+          } else {
+            clearInterval(interval);
+            setCountdown(null);
+            console.log('🎮 게임 시작!');
+          }
+        }, 1000);
         break;
       case SOCKET_EVENTS.STATE_WIN:
         console.log('state win 수신');
