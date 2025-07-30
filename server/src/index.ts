@@ -27,7 +27,7 @@ const io = new SocketIOServer(server, {
   cors: {
     origin: '*', // 개발 중엔 모두 허용. 배포 시 도메인 제한 권장
     methods: ['GET', 'POST'],
-  },
+  }
 });
 // 서버 시작
 server.listen(PORT, () => {
@@ -68,19 +68,33 @@ io.on('connection', async (socket) => {
     console.log('ping-pong complete:', offset);
 
     socket.on('disconnect', () => {
-        console.log(`❌ 연결 종료: ${socket.id}`);
-        const state = sessions.get(socket.id);
-        // state?.pcClient?.close(); // 라이브러리 버그로 인해 서버가 멈추므로 주석 처리
-        // state?.pcGpu?.close();    // 라이브러리 버그로 인해 서버가 멈추므로 주석 처리
-        state.pcClient = null;
-        state.pcGpu = null;
-        sessions.delete(socket.id); // 가비지 컬렉터가 정리해주길 기도합시다
+        console.log(`[Server] ❌ 연결 종료 감지: ${socket.id}`); // disconnect 감지 로그
+        // 세션에서 삭제
+        sessions.delete(socket.id);
+
+        // GPU에 연결 종료 알림 -> GPU가 WebRTC 연결 해제
+        fetch(`${GPU_HTTP}/disconnect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ socketId: socket.id })
+        }).then(response => {
+            if (response.ok) {
+                console.log(`[Server] GPU 서버 disconnect 요청 성공: ${socket.id}`);
+            } else {
+                console.error(`[Server] GPU 서버 disconnect 요청 실패 (${response.status}): ${response.statusText}`);
+            }
+        }).catch(error => {
+            console.error(`[Server] GPU 서버 disconnect 요청 중 오류 발생: ${error}`);
+        });
+
+        // 같은 방의 클라이언트에게 알림 -> WebRTC 연결 해제
         const roomId = socket.data.roomId;
         if (roomId) {
             socket.to(roomId).emit(SOCKET_EVENTS.ROOM_PEER_LEFT);
             console.log(`👋 방 ${roomId}에 퇴장 알림`);
         }
     });
+    console.log(`[Server] disconnect 핸들러 등록 완료 for socket: ${socket.id}`); // 핸들러 등록 확인 로그
 });
 
 async function handleSocketEvent(socket: Socket, event: string, payload: any) {
@@ -90,8 +104,8 @@ async function handleSocketEvent(socket: Socket, event: string, payload: any) {
         handleCaliEvent(socket, event, payload);
     } else if (event.startsWith('c2c:')) {
         handleC2CEvent(socket, event, payload);
-    } else if (event.startsWith('c2s:')) {
-        await handleC2SEvent(socket, event, payload);
+    } else if (event.startsWith('c2g:')) {
+        await handleC2GEvent(socket, event, payload);
     } else {
         console.warn(`[⚠️ Unhandled Event] ${event}`);
     }
@@ -114,6 +128,7 @@ function handleRoomEvent(socket: Socket, event: string, payload: any) {
     
             socket.join(roomId);
             socket.data.roomId = roomId;
+            socket.emit(SOCKET_EVENTS.ROOM_WELCOME, { roomId });
             console.log(`🔗 ${socket.id} → 방 ${roomId} 입장`);
     
             const updatedRoom = socket.nsp.adapter.rooms.get(roomId);
@@ -123,8 +138,8 @@ function handleRoomEvent(socket: Socket, event: string, payload: any) {
                 const [socketId1, socketId2] = socketsInRoom;
             
                 // 한쪽은 caller, 한쪽은 callee 지정
-                socket.nsp.to(socketId1).emit(SOCKET_EVENTS.C2C_CALLER, { socketId2 });
-                socket.nsp.to(socketId2).emit(SOCKET_EVENTS.C2C_CALLEE, { socketId1 });
+                socket.nsp.to(socketId1).emit(SOCKET_EVENTS.C2C_CALLER, { peerId: socketId2 });
+                socket.nsp.to(socketId2).emit(SOCKET_EVENTS.C2C_CALLEE, { peerId: socketId1 });
                 console.log(`🎭 역할 분배 완료: ${socketId1} → caller, ${socketId2} → callee`);
             }
             break;
@@ -142,12 +157,12 @@ function handleCaliEvent(socket: Socket, event: string, payload: any) {
     switch (event) {
         case SOCKET_EVENTS.CALI_JOIN: {
             const { username } = payload as { username: string };
-            console.log(`유저 ${username} cali-join`);
+            console.log(`[${socket.id}] CALI_JOIN 수신, 유저 ${username}`);
             socket.emit(SOCKET_EVENTS.CALI_WELCOME);
         }
         case SOCKET_EVENTS.CALI_START: {
             const { username } = payload as { username: string };
-            console.log(`유저 ${username} cali-start`);
+            console.log(`[${socket.id}] CALI_START 수신, 유저 ${username}`);
         }
     }
 }
@@ -183,126 +198,169 @@ function handleC2CEvent(socket: Socket, event: string, payload: any) {
     }
 }
 
-async function handleC2SEvent(socket: Socket, event: string, payload: any) {
+async function handleC2GEvent(socket: Socket, event: string, payload: any) {
     switch (event) {
-        case SOCKET_EVENTS.C2S_OFFER: {
-            console.log('📤 client to server offer 수신');
+        case SOCKET_EVENTS.C2G_OFFER: {
+            console.log(`[${socket.id}] 📤 client to gpu offer 수신`);
             const { offer } = payload as { offer: RTCSessionDescriptionInit };
-
             const state = sessions.get(socket.id);
             if (!state) {
                 console.warn(`⚠️ 세션 정보 없음: ${socket.id}`);
                 return;
             }
-
-            if (state.pcClient) {
-                console.warn(`⚠️ 이미 pcClient가 존재함: ${socket.id}`);
-                state.pcClient.close(); // 기존 연결이 있다면 닫음
-            }
-
-            state.pcClient = new RTCPeerConnection({ iceServers: STUN });
-            state.pcClientId = Date.now(); // 고유 ID로 타임스탬프 사용
-            const connectionId = state.pcClientId;
-            console.log(`pcClient 생성 [ID: ${connectionId}]`);
-
-            state.pcClient.ontrack = async (event: RTCTrackEvent) => {
-                try {
-                    console.log(`pcClient 트랙 수신 [ID: ${connectionId}]`);
-                    const { track, streams } = event;
-                    if (!state.pcGpu) {
-                        await createGpuPeer(state, socket.id, track, streams[0]);
-                        console.log(`gpuPeer 생성됨 [ID: ${connectionId}]`);
-                    }
-                } catch (error) {
-                    console.error(`[💥 ontrack Error] gpuPeer 생성 중 오류 발생 [ID: ${connectionId}]:`, error);
-                }
-            };
-
-            // state.pcClient.onconnectionstatechange = () => {
-            //     const conn = state.pcClient.connectionState;
-            //     console.log(`📶 C2S WebRTC 연결 상태 변경 [ID: ${connectionId}]: ${conn}`);
-            //     if (conn === 'connected') {
-            //     console.log(`✅ C2S WebRTC 연결 완료 [ID: ${connectionId}] (P2P 연결 성공)`);
-            //     }
-            // }
-
-            state.pcClient.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-                if (event.candidate) {
-                  const candidate = event.candidate;
-                  const candidateInit = {
-                    candidate: candidate.candidate,
-                    sdpMid: candidate.sdpMid,
-                    sdpMLineIndex: candidate.sdpMLineIndex,
-                    usernameFragment: candidate.usernameFragment,
-                  };
-                  console.log('📤 client to server ICE 후보 전송');
-                  socket.emit(SOCKET_EVENTS.C2S_ICE_CANDIDATE, { candidateInit });
-                }
-            };
-        
-            await state.pcClient.setRemoteDescription(offer);
-            await state.pcClient.setLocalDescription(await state.pcClient.createAnswer());
-            const answer = state.pcClient.localDescription;
-            socket.emit(SOCKET_EVENTS.C2S_ANSWER, { answer });
-            console.log('📤 client to server answer 송신');
+            const res = await fetch(`${GPU_HTTP}/connect`, {
+                method:'POST', headers:{ 'Content-Type':'application/json' },
+                body:JSON.stringify({
+                    socketId:   socket.id,
+                    offset:     state.offset,
+                    sdp:        offer.sdp,
+                    type:       offer.type
+                })
+            });
+            console.log(`[${socket.id}] 📤 client to gpu offer 중계`);                  
+            const { sdp, type } = await res.json();
+            console.log(`[${socket.id}] 📤 client to gpu answer 수신`);
+            socket.emit(SOCKET_EVENTS.C2G_ANSWER, { sdp, type });
+            console.log(`[${socket.id}] 📤 client to gpu answer 중계`);
             break;
         }
-        case SOCKET_EVENTS.C2S_ANSWER: {
-            // 받을 일 없음, 할 거 없음
-            break;
-        }
-        case SOCKET_EVENTS.C2S_ICE_CANDIDATE: {
-            console.log('📤 client to server ICE 후보 수신');
+        case SOCKET_EVENTS.C2G_ICE_CANDIDATE: {
+            console.log(`[${socket.id}] 📤 client to gpu ICE 후보 수신`);
             const { candidateInit } = payload as { candidateInit: RTCIceCandidateInit };
-            const state = sessions.get(socket.id);
-            if (state && state.pcClient) {
-                try {
-                    await state.pcClient.addIceCandidate(new RTCIceCandidate(candidateInit));
-                } catch (err) {
-                    console.warn('ICE 후보 추가 실패:', err);
-                }
-            }
+            const res = await fetch(`${GPU_HTTP}/ice-candidate`, {
+                method:'POST', headers:{ 'Content-Type':'application/json' },
+                body:JSON.stringify({ 
+                    socketId:   socket.id, 
+                    candidate:  candidateInit 
+                })
+            });
+            console.log(`[${socket.id}] 📤 client to gpu ICE 후보 중계, 결과 : ${res.status}, ${res.statusText}`);
             break;
         }
     }
 }
 
-interface GpuState {
-    pcGpu: RTCPeerConnection | null;
-    offset: number;
-}
+// 폐기!
+//   async function handleC2SEvent(socket: Socket, event: string, payload: any) {
+//     switch (event) {
+//         case SOCKET_EVENTS.C2S_OFFER: {
+//             console.log('📤 client to server offer 수신');
+//             const { offer } = payload as { offer: RTCSessionDescriptionInit };
 
-async function createGpuPeer(
-    state: GpuState,
-    socketId: string,
-    track: MediaStreamTrack,
-    stream: MediaStream
-  ): Promise<void> {
-    const pc = new RTCPeerConnection({ iceServers: STUN });
-    state.pcGpu = pc;
+//             const state = sessions.get(socket.id);
+//             if (!state) {
+//                 console.warn(`⚠️ 세션 정보 없음: ${socket.id}`);
+//                 return;
+//             }
+
+//             if (state.pcClient) {
+//                 console.warn(`⚠️ 이미 pcClient가 존재함: ${socket.id}`);
+//                 state.pcClient.close(); // 기존 연결이 있다면 닫음
+//             }
+
+//             state.pcClient = new RTCPeerConnection({ iceServers: STUN });
+//             state.pcClientId = Date.now(); // 고유 ID로 타임스탬프 사용
+//             const connectionId = state.pcClientId;
+//             console.log(`pcClient 생성 [ID: ${connectionId}]`);
+
+//             state.pcClient.ontrack = async (event: RTCTrackEvent) => {
+//                 try {
+//                     console.log(`pcClient 트랙 수신 [ID: ${connectionId}]`);
+//                     const { track, streams } = event;
+//                     if (!state.pcGpu) {
+//                         await createGpuPeer(state, socket.id, track, streams[0]);
+//                         console.log(`gpuPeer 생성됨 [ID: ${connectionId}]`);
+//                     }
+//                 } catch (error) {
+//                     console.error(`[💥 ontrack Error] gpuPeer 생성 중 오류 발생 [ID: ${connectionId}]:`, error);
+//                 }
+//             };
+
+//             // state.pcClient.onconnectionstatechange = () => {
+//             //     const conn = state.pcClient.connectionState;
+//             //     console.log(`📶 C2S WebRTC 연결 상태 변경 [ID: ${connectionId}]: ${conn}`);
+//             //     if (conn === 'connected') {
+//             //     console.log(`✅ C2S WebRTC 연결 완료 [ID: ${connectionId}] (P2P 연결 성공)`);
+//             //     }
+//             // }
+
+//             state.pcClient.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+//                 if (event.candidate) {
+//                   const candidate = event.candidate;
+//                   const candidateInit = {
+//                     candidate: candidate.candidate,
+//                     sdpMid: candidate.sdpMid,
+//                     sdpMLineIndex: candidate.sdpMLineIndex,
+//                     usernameFragment: candidate.usernameFragment,
+//                   };
+//                   console.log('📤 client to server ICE 후보 전송');
+//                   socket.emit(SOCKET_EVENTS.C2S_ICE_CANDIDATE, { candidateInit });
+//                 }
+//             };
+        
+//             await state.pcClient.setRemoteDescription(offer);
+//             await state.pcClient.setLocalDescription(await state.pcClient.createAnswer());
+//             const answer = state.pcClient.localDescription;
+//             socket.emit(SOCKET_EVENTS.C2S_ANSWER, { answer });
+//             console.log('📤 client to server answer 송신');
+//             break;
+//         }
+//         case SOCKET_EVENTS.C2S_ANSWER: {
+//             // 받을 일 없음, 할 거 없음
+//             break;
+//         }
+//         case SOCKET_EVENTS.C2S_ICE_CANDIDATE: {
+//             console.log('📤 client to server ICE 후보 수신');
+//             const { candidateInit } = payload as { candidateInit: RTCIceCandidateInit };
+//             const state = sessions.get(socket.id);
+//             if (state && state.pcClient) {
+//                 try {
+//                     await state.pcClient.addIceCandidate(new RTCIceCandidate(candidateInit));
+//                 } catch (err) {
+//                     console.warn('ICE 후보 추가 실패:', err);
+//                 }
+//             }
+//             break;
+//         }
+//     }
+// }
+
+// interface GpuState {
+//     pcGpu: RTCPeerConnection | null;
+//     offset: number;
+// }
+
+// async function createGpuPeer(
+//     state: GpuState,
+//     socketId: string,
+//     track: MediaStreamTrack,
+//     stream: MediaStream
+//   ): Promise<void> {
+//     const pc = new RTCPeerConnection({ iceServers: STUN });
+//     state.pcGpu = pc;
     
-    pc.addTrack(track, stream);
+//     pc.addTrack(track, stream);
   
-    pc.onicecandidate = ({ candidate }: RTCPeerConnectionIceEvent) =>
-        candidate && fetch(`${GPU_HTTP}/ice-candidate`, {
-          method:'POST', headers:{ 'Content-Type':'application/json' },
-          body:JSON.stringify({ socketId, candidate })
-        });
+//     pc.onicecandidate = ({ candidate }: RTCPeerConnectionIceEvent) =>
+//         candidate && fetch(`${GPU_HTTP}/ice-candidate`, {
+//           method:'POST', headers:{ 'Content-Type':'application/json' },
+//           body:JSON.stringify({ socketId, candidate })
+//         });
   
-    await pc.setLocalDescription(await pc.createOffer());
+//     await pc.setLocalDescription(await pc.createOffer());
   
-    const res = await fetch(`${GPU_HTTP}/connect`, {
-      method:'POST', headers:{ 'Content-Type':'application/json' },
-      body:JSON.stringify({
-        socketId,
-        offset: state.offset,
-        sdp:    pc.localDescription?.sdp,
-        type:   pc.localDescription?.type
-      })
-    });
-    const { sdp, type } = await res.json();
-    await pc.setRemoteDescription({ sdp, type });
+//     const res = await fetch(`${GPU_HTTP}/connect`, {
+//       method:'POST', headers:{ 'Content-Type':'application/json' },
+//       body:JSON.stringify({
+//         socketId,
+//         offset: state.offset,
+//         sdp:    pc.localDescription?.sdp,
+//         type:   pc.localDescription?.type
+//       })
+//     });
+//     const { sdp, type } = await res.json();
+//     await pc.setRemoteDescription({ sdp, type });
   
-    console.log('🔗 Hub-GPU peer ready');
-    io.to(socketId).emit('ready');
-  }
+//     console.log('🔗 Hub-GPU peer ready');
+//     io.to(socketId).emit('ready');
+//   }

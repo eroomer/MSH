@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { socket } from '../libs/socket';           // 소켓 전역 변수
 import { SOCKET_EVENTS } from '../../../shared/socketEvents';
-import { createPeerConnection, createServerConnection } from '../libs/webrtc';  // WebRTC 연결 객체 생성
+import { createPeerConnection, createGPUConnection } from '../libs/webrtc';  // WebRTC 연결 객체 생성
 import { drawVideoToCanvas } from '../libs/canvas/drawVideoToCanvas'; // Video -> Canvas 복사 함수
 
 function GamePage() {
@@ -13,10 +13,10 @@ function GamePage() {
   const [blink, setBlink] = useState(false);      // 감음?
 
   const pcPeer = useRef<RTCPeerConnection | null>(null);     // 상대 클라이언트와의 WebRTC 연결 객체
-  const pcServer = useRef<RTCPeerConnection | null>(null);     // 서버와의 WebRTC 연결 객체
+  const pcGPU = useRef<RTCPeerConnection | null>(null);     // GPU와의 WebRTC 연결 객체
   const myStreamRef = useRef<MediaStream | null>(null);          // 내 캠/마이크 스트림 저장
   const iceQueuePeer : RTCIceCandidateInit[] = [];               // 상대 클라이언트와의 ICE 후보 저장
-  const iceQueueServer : RTCIceCandidateInit[] = [];             // 서버와의 ICE 후보 저장
+  const iceQueueGPU : RTCIceCandidateInit[] = [];             // GPU와의 ICE 후보 저장
 
   const myVideoRef = useRef<HTMLVideoElement>(null);        // 내 비디오 스트림 
   const myCanvasRef = useRef<HTMLCanvasElement>(null);      // 내 비디오 스트림을 복사본 + 효과 적용한 실제 표시 화면
@@ -28,25 +28,44 @@ function GamePage() {
 
   useEffect(() => {
     // 소켓 이벤트 처리
+    socket.on('connect', () => {
+      console.log(`[${socket.id}] ✅ WebSocket 연결됨`);
+      socket.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId });
+      console.log(`[${socket.id}] ✅ room: ${roomId} 입장 신청`);
+    });
+    socket.on('disconnect', async () => {
+      console.log(`[${socket.id}] ❌ WebSocket 연결 종료`);
+      if (pcPeer.current) {
+        pcPeer.current.getSenders().forEach((sender) => {
+          sender.track?.stop(); // 트랙 정리
+        });
+        await pcPeer.current.close(); // WebRTC 연결 종료
+        pcPeer.current = null;  // 참조 제거
+      }
+      if (pcGPU.current) {
+        pcGPU.current.getSenders().forEach((sender) => {
+          sender.track?.stop(); // 트랙 정리
+          console.log(`[${socket.id}] ❌ WebRTC 트랙 정리`);
+        });
+        await pcGPU.current.close(); // WebRTC 연결 종료
+        console.log(`[${socket.id}] ❌ WebRTC 연결 종료`);
+        pcGPU.current = null;  // 참조 제거
+      }
+    });
     const handler = async (event: string, payload: any) => {
       await handleSocketEvent(event, payload);
     };
     socket.onAny(handler);
-
     const startMedia = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); // 비디오/오디오 모두 포함된 full stream
         console.log('🎥 내 스트림 획득됨:');
         myStreamRef.current = stream;
-
         if (myVideoRef.current) {
           myVideoRef.current.srcObject = stream;  // 비디오 stream만 저장
         }
-
         console.log('🔌 소켓 연결됨, 방 입장 요청:', roomId);
         socket.connect();
-        socket.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId });
-
         pcPeer.current = createPeerConnection(
             myStreamRef.current!,
             (remoteStream) => {
@@ -55,16 +74,12 @@ function GamePage() {
               }
             }
         );
-
-        pcServer.current = await createServerConnection(
-          myVideoRef.current!, roiCanvasRef.current!, 
-        );
       } catch (err) {
         console.error('Media error:', err);
       }
     };
     startMedia();
-
+    
     if (myVideoRef.current && myCanvasRef.current) {
       console.log('내 비디오 스트림 복사');
       drawVideoToCanvas(myVideoRef.current, myCanvasRef.current);
@@ -79,8 +94,6 @@ function GamePage() {
       console.log('🧹 언마운트 및 정리');
       socket.offAny(handler);
       socket.disconnect();
-      pcPeer.current?.close();
-      pcPeer.current = null;
     };
   }, [roomId]);
 
@@ -113,11 +126,11 @@ function GamePage() {
 
   async function handleSocketEvent(event: string, payload: any) {
     if (event.startsWith('room:')) {
-      handleRoomEvent(event, payload);
+      await handleRoomEvent(event, payload);
     } else if (event.startsWith('c2c:')) {
       await handleC2CEvent(event, payload);
-    } else if (event.startsWith('c2s:')) {
-      await handleC2SEvent(event, payload);
+    } else if (event.startsWith('c2g:')) {
+      await handleC2GEvent(event, payload);
     } else if (event.startsWith('gs:')) {
       await handleGSEvent(event, payload);
     } else {
@@ -125,9 +138,13 @@ function GamePage() {
     }
   }
   
-  function handleRoomEvent(event: string, _payload: any) {
+  async function handleRoomEvent(event: string, _payload: any) {
     switch (event) {
-      case SOCKET_EVENTS.ROOM_JOIN:
+      case SOCKET_EVENTS.ROOM_WELCOME:
+        console.log(`[${socket.id}] ✅ room: ${roomId} 입장 완료`);
+        pcGPU.current = await createGPUConnection(
+          myVideoRef.current!, roiCanvasRef.current!, 
+        ); // GPU와의 peerConnection 만들면서 offer도 전송하는 함수
         break;
       case SOCKET_EVENTS.ROOM_PING:
         console.log('ping 수신, pong 송신');
@@ -223,37 +240,33 @@ function GamePage() {
     }
   }
 
-  // 기능 미정
-  async function handleC2SEvent(event: string, payload: any) {
+  async function handleC2GEvent(event: string, payload: any) {
     switch(event) {
-      case SOCKET_EVENTS.C2S_OFFER:
-        // 해당사항 없음
-        break;
-      case SOCKET_EVENTS.C2S_ANSWER: {
-        const { answer } = payload as { answer: RTCSessionDescriptionInit };
-        console.log('📨 c2s answer 수신');
-        await pcServer.current?.setRemoteDescription(answer);
+      case SOCKET_EVENTS.C2G_ANSWER: {
+        const { sdp, type } = payload as RTCSessionDescriptionInit; // answer parsing
+        console.log(`[${socket.id}] 📨 cient to gpu answer 수신`);
+        await pcGPU.current?.setRemoteDescription({ sdp, type });
 
-        for (const candidateInit of iceQueueServer) {
-          await pcServer.current?.addIceCandidate(candidateInit);
+        for (const candidateInit of iceQueueGPU) {
+          await pcGPU.current?.addIceCandidate(candidateInit);
         }
-        iceQueueServer.length = 0;
+        iceQueueGPU.length = 0;
         break;
       }
-      case SOCKET_EVENTS.C2S_ICE_CANDIDATE: {
+      case SOCKET_EVENTS.C2G_ICE_CANDIDATE: {
         const { candidateInit } = payload as { candidateInit: RTCIceCandidateInit };
-        console.log('❄️ c2s ICE 후보 수신');
-        if (pcServer.current?.remoteDescription) {
-          await pcServer.current.addIceCandidate(candidateInit);
-          console.log('❄️ c2s ICE 후보 추가');
+        console.log(`[${socket.id}] ❄️ cient to gpu ICE 후보 수신`);
+        if (pcGPU.current?.remoteDescription) {
+          await pcGPU.current.addIceCandidate(candidateInit);
+          console.log(`[${socket.id}] ❄️ cient to gpu ICE 후보 추가`);
         } else {
-          iceQueueServer.push(candidateInit);
-          console.log('❄️ c2s ICE 후보 큐에 저장');
+          iceQueueGPU.push(candidateInit);
+          console.log(`[${socket.id}] ❄️ cient to gpu ICE 후보 저장`);
         }
         break; 
       }
       default:
-        console.warn(`[⚠️ Unhandled C2S Event] ${event}`);
+        console.warn(`[⚠️ Unhandled C2G Event] ${event}`);
         break;
     }
   }
@@ -274,3 +287,45 @@ function GamePage() {
 }
 
 export default GamePage;
+
+
+
+
+
+
+
+
+  // 폐기!
+  // async function handleC2SEvent(event: string, payload: any) {
+  //   switch(event) {
+  //     case SOCKET_EVENTS.C2S_OFFER:
+  //       // 해당사항 없음
+  //       break;
+  //     case SOCKET_EVENTS.C2S_ANSWER: {
+  //       const { answer } = payload as { answer: RTCSessionDescriptionInit };
+  //       console.log('📨 c2s answer 수신');
+  //       await pcServer.current?.setRemoteDescription(answer);
+
+  //       for (const candidateInit of iceQueueServer) {
+  //         await pcServer.current?.addIceCandidate(candidateInit);
+  //       }
+  //       iceQueueServer.length = 0;
+  //       break;
+  //     }
+  //     case SOCKET_EVENTS.C2S_ICE_CANDIDATE: {
+  //       const { candidateInit } = payload as { candidateInit: RTCIceCandidateInit };
+  //       console.log('❄️ c2s ICE 후보 수신');
+  //       if (pcServer.current?.remoteDescription) {
+  //         await pcServer.current.addIceCandidate(candidateInit);
+  //         console.log('❄️ c2s ICE 후보 추가');
+  //       } else {
+  //         iceQueueServer.push(candidateInit);
+  //         console.log('❄️ c2s ICE 후보 큐에 저장');
+  //       }
+  //       break; 
+  //     }
+  //     default:
+  //       console.warn(`[⚠️ Unhandled C2S Event] ${event}`);
+  //       break;
+  //   }
+  // }

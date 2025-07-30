@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { useUser } from '../contexts/UserContext';
 import { useNavigate } from 'react-router-dom';
 import { socket } from '../libs/socket';           // 소켓 전역 변수
-import { createServerConnection } from '../libs/webrtc';
+import { createGPUConnection } from '../libs/webrtc';
 import { SOCKET_EVENTS } from '../../../shared/socketEvents';
 
 type Point = { x: number; y: number };
@@ -21,9 +21,9 @@ export default function CalibrationPage() {
   const [index, setIndex] = useState(-1); // 캘리브레이션 단계, -1이면 시작 전
   const [currentPoint, setCurrentPoint] = useState<Point | null>(null);
   const [timeLeft, setTimeLeft] = useState(5); // 타이머 상태
-  const iceQueueServer : RTCIceCandidateInit[] = [];             // 서버와의 ICE 후보 저장
+  const iceQueueGPU : RTCIceCandidateInit[] = [];             // GPU와의 ICE 후보 저장
 
-  const pcServer = useRef<RTCPeerConnection | null>(null);     // 서버와의 WebRTC 연결 객체
+  const pcGPU = useRef<RTCPeerConnection | null>(null);     // GPU와의 WebRTC 연결 객체
   const myVideoRef = useRef<HTMLVideoElement>(null);
   const roiCanvasRef = useRef<HTMLCanvasElement>(null);     // 시선 추적 로직에 사용할 ROI 캔버스
   const calibrationAreaRef = useRef<HTMLDivElement>(null);
@@ -31,11 +31,11 @@ export default function CalibrationPage() {
   // 🔌 웹소켓 연결
   useEffect(() => {
     socket.on('connect', () => {
-      console.log('✅ WebSocket 연결됨');
+      console.log(`[${socket.id}] ✅ WebSocket 연결됨`);
       socket.emit(SOCKET_EVENTS.CALI_JOIN, { username });
     });
     socket.on(SOCKET_EVENTS.CALI_WELCOME, async () => {
-        console.log('📨 CALI_WELCOME 수신');
+        console.log(`[${socket.id}] 📨 CALI_WELCOME 수신`);
         if (myVideoRef.current && roiCanvasRef.current) {
             // 비디오 요소가 준비될 때까지 기다립니다.
             await new Promise<void>(resolve => {
@@ -45,36 +45,45 @@ export default function CalibrationPage() {
                     myVideoRef.current!.onloadedmetadata = () => resolve();
                 }
             });
-            pcServer.current = await createServerConnection(
+            pcGPU.current = await createGPUConnection(
                 myVideoRef.current!, roiCanvasRef.current!, 
-            );
+            ); // GPU와의 peerConnection 만들면서 offer도 전송하는 함수
         } else {
             console.error('CALI_WELCOME 수신 시 myVideoRef.current 또는 roiCanvasRef.current가 null입니다.');
         }
     });
-    socket.on(SOCKET_EVENTS.C2S_ANSWER, async ({ answer }: { answer: RTCSessionDescriptionInit }) => {
-        console.log('📨 C2S_ANSWER 수신');
+    socket.on(SOCKET_EVENTS.C2G_ANSWER, async ({ sdp, type }: RTCSessionDescriptionInit) => {
+        console.log(`[${socket.id}] 📨 C2G_ANSWER 수신`);
       
-        await pcServer.current?.setRemoteDescription(answer);
+        await pcGPU.current?.setRemoteDescription({ sdp, type });
       
-        for (const candidateInit of iceQueueServer) {
-          await pcServer.current?.addIceCandidate(candidateInit);
+        for (const candidateInit of iceQueueGPU) {
+          await pcGPU.current?.addIceCandidate(candidateInit);
         }
-        iceQueueServer.length = 0;
+        iceQueueGPU.length = 0;
     });
-    socket.on(SOCKET_EVENTS.C2S_ICE_CANDIDATE, async ({ candidateInit }: { candidateInit: RTCIceCandidateInit }) => {
-        console.log('❄️ c2s ICE 후보 수신');
-      
-        if (pcServer.current?.remoteDescription) {
-          await pcServer.current.addIceCandidate(candidateInit);
-          console.log('❄️ c2s ICE 후보 추가');
+    socket.on(SOCKET_EVENTS.C2G_ICE_CANDIDATE, async ({ candidateInit }: { candidateInit: RTCIceCandidateInit }) => {
+        console.log(`[${socket.id}] ❄️ cient to gpu ICE 후보 수신`);
+        if (pcGPU.current?.remoteDescription) {
+          await pcGPU.current.addIceCandidate(candidateInit);
+          console.log(`[${socket.id}] ❄️ cient to gpu ICE 후보 추가`);
         } else {
-          iceQueueServer.push(candidateInit);
-          console.log('❄️ c2s ICE 후보 큐에 저장');
+          iceQueueGPU.push(candidateInit);
+          console.log(`[${socket.id}] ❄️ cient to gpu ICE 후보 저장`);
         }
-      });
-    socket.on('disconnect', () => {
-      console.log('❌ WebSocket 연결 종료');
+    });
+    socket.on(SOCKET_EVENTS.GS_GAZE, async ({ gaze, blink }: {gaze: { x: number; y: number }, blink: boolean;}) => {
+      console.log(gaze.x, gaze.y, blink)
+    });
+    socket.on('disconnect', async () => {
+      console.log(`[${socket.id}]❌ WebSocket 연결 종료`);
+      if (pcGPU.current) {
+        pcGPU.current.getSenders().forEach((sender) => {
+          sender.track?.stop(); // 트랙 정리
+        });
+        pcGPU.current.close(); // WebRTC 연결 종료
+        pcGPU.current = null;  // 참조 제거
+      }
     });
     const startMedia = async () => {
         console.log('Attempting to start media stream...');

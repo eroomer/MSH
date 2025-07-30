@@ -1,5 +1,6 @@
 export const SOCKET_EVENTS = {
     ROOM_JOIN: 'room:join',
+    ROOM_WELCOME: 'room:welcome',
     ROOM_FULL: 'room:full',
     ROOM_PEER_LEFT: 'room:peerleft',
     ROOM_PING: 'room:ping',
@@ -15,9 +16,13 @@ export const SOCKET_EVENTS = {
     C2C_ANSWER: 'c2c:answer',
     C2C_ICE_CANDIDATE: 'c2c:ice-candidate',
 
-    C2S_OFFER: 'c2s:offer',
-    C2S_ANSWER: 'c2s:answer',
-    C2S_ICE_CANDIDATE: 'c2s:ice-candidate',
+    // C2S_OFFER: 'c2s:offer',
+    // C2S_ANSWER: 'c2s:answer',
+    // C2S_ICE_CANDIDATE: 'c2s:ice-candidate',  // 폐기!
+
+    C2G_OFFER: 'c2g:offer',
+    C2G_ANSWER: 'c2g:answer',
+    C2G_ICE_CANDIDATE: 'c2g:ice-candidate',
 
     GS_GAZE: 'gs:gaze',
     // ... 필요에 따라 추가
