@@ -9,7 +9,7 @@ export function createPeerConnection(
 ): RTCPeerConnection {
   const pc = new RTCPeerConnection({ iceServers: STUN });
 
-  //console.log('🌐 client to cleint WebRTC 연결 생성됨');
+  console.log('🌐 client to cleint WebRTC 연결 생성됨');
 
   // ICE 후보 전송
   pc.onicecandidate = (event) => {
@@ -44,61 +44,47 @@ export function createPeerConnection(
   return pc;
 }
 
-export async function createServerConnection(
+export async function createGPUConnection(
   videoEl: HTMLVideoElement, 
   canvasEl: HTMLCanvasElement
 ): Promise<RTCPeerConnection> {
-
   const pc = new RTCPeerConnection({ iceServers: STUN }); // peerconnection
-
-  const dc = pc.createDataChannel('meta');                // detachannel
-
-  console.log('🌐 client to server WebRTC 연결 생성됨');
-
-  // ICE 후보 전송
+  console.log(`[${socket.id}] 🌐 client to gpu WebRTC 연결 생성됨`);
+  // 연결 상태 변화 콜백
+  pc.onconnectionstatechange = () => {
+    const state = pc.connectionState;
+    console.log(`[${socket.id}] 📶 client to gpu WebRTC 연결 상태 변경: ${state}`);
+    if (state === 'connected') {
+      console.log(`[${socket.id}] ✅ client to gpu WebRTC 연결 완료 (P2P 연결 성공)`);
+    }
+  };
+  // ICE 후보 콜백 지정
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       const candidateInit = event.candidate.toJSON();
-      //console.log('📤 client to server ICE 후보 전송');
-      socket.emit(SOCKET_EVENTS.C2S_ICE_CANDIDATE, { candidateInit });
+      console.log(`[${socket.id}] 📤 client to gpu ICE 후보 전송`);
+      socket.emit(SOCKET_EVENTS.C2G_ICE_CANDIDATE, { candidateInit });
     }
   };
-
-  // 연결 상태 확인
-  pc.onconnectionstatechange = () => {
-    const state = pc.connectionState;
-    console.log('📶 client to server WebRTC 연결 상태 변경:', state);
-    if (state === 'connected') {
-      console.log('✅ client to server WebRTC 연결 완료 (P2P 연결 성공)');
-    }
-  };
-
-  await startCapture(pc, dc, videoEl, canvasEl);
-
+  await startCapture(pc, videoEl, canvasEl); // 트랙에 ROI캔버스 추가하는 함수
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-  socket.emit(SOCKET_EVENTS.C2S_OFFER, { offer });
-  console.log('📤 client to server offer 전송');
-
+  socket.emit(SOCKET_EVENTS.C2G_OFFER, { offer });
+  console.log(`[${socket.id}] 📤 client to gpu offer 전송`);
   return pc;
 }
 
-async function startCapture(pc: RTCPeerConnection, dc: RTCDataChannel, videoEl: HTMLVideoElement, canvasEl: HTMLCanvasElement): Promise<void> {
-  await videoEl.play();
+async function startCapture(pc: RTCPeerConnection, videoEl: HTMLVideoElement, canvasEl: HTMLCanvasElement): Promise<void> {
   const ctx = canvasEl.getContext('2d');
   if (!ctx) {
     throw new Error('2D context not available');
   }
-
   const ROI = 256;
-  let fid   = 0;
-
   const draw = () => {
     if (videoEl.readyState < 2) {
       requestAnimationFrame(draw);
       return;
     }
-
     const side = Math.min(videoEl.videoWidth, videoEl.videoHeight);
     ctx.drawImage(
       videoEl,
@@ -107,19 +93,97 @@ async function startCapture(pc: RTCPeerConnection, dc: RTCDataChannel, videoEl: 
       side, side,
       0, 0, ROI, ROI
     );
-
-    if (dc.readyState === 'open') {
-      dc.send(JSON.stringify({ fid: fid++, ts: Date.now() / 1000 }));
-    }
     requestAnimationFrame(draw);
   };
   draw();
 
   const cStream = canvasEl.captureStream(30);
   cStream.getTracks().forEach((track) => {
-    console.log(new Date().toLocaleTimeString(), '➕ client to server WebRTC 트랙 추가됨', cStream);
+    console.log(`[${socket.id}]➕ client to server WebRTC 트랙 추가됨: ${cStream}`);
     pc.addTrack(track, cStream);
   });
 }
 
+// 폐기!
+// export async function createServerConnection(
+//   videoEl: HTMLVideoElement, 
+//   canvasEl: HTMLCanvasElement
+// ): Promise<RTCPeerConnection> {
+
+//   const pc = new RTCPeerConnection({ iceServers: STUN }); // peerconnection
+
+//   const dc = pc.createDataChannel('meta');                // detachannel
+
+//   console.log('🌐 client to server WebRTC 연결 생성됨');
+
+//   // ICE 후보 전송
+//   pc.onicecandidate = (event) => {
+//     if (event.candidate) {
+//       const candidateInit = event.candidate.toJSON();
+//       console.log('📤 client to server ICE 후보 전송');
+//       socket.emit(SOCKET_EVENTS.C2S_ICE_CANDIDATE, { candidateInit });
+//     }
+//   };
+
+//   // 연결 상태 확인
+//   pc.onconnectionstatechange = () => {
+//     const state = pc.connectionState;
+//     console.log('📶 client to server WebRTC 연결 상태 변경:', state);
+//     if (state === 'connected') {
+//       console.log('✅ client to server WebRTC 연결 완료 (P2P 연결 성공)');
+//     }
+//   };
+
+//   pc.oniceconnectionstatechange = () => {
+//     console.log('ICE 상태:', pc.iceConnectionState);
+//   };
+
+//   await startCapture(pc, dc, videoEl, canvasEl);
+
+//   const offer = await pc.createOffer();
+//   await pc.setLocalDescription(offer);
+//   socket.emit(SOCKET_EVENTS.C2S_OFFER, { offer });
+//   console.log('📤 client to server offer 전송');
+
+//   return pc;
+// }
+
+// async function startCapture(pc: RTCPeerConnection, dc: RTCDataChannel, videoEl: HTMLVideoElement, canvasEl: HTMLCanvasElement): Promise<void> {
+//   await videoEl.play();
+//   const ctx = canvasEl.getContext('2d');
+//   if (!ctx) {
+//     throw new Error('2D context not available');
+//   }
+
+//   const ROI = 256;
+//   let fid   = 0;
+
+//   const draw = () => {
+//     if (videoEl.readyState < 2) {
+//       requestAnimationFrame(draw);
+//       return;
+//     }
+
+//     const side = Math.min(videoEl.videoWidth, videoEl.videoHeight);
+//     ctx.drawImage(
+//       videoEl,
+//       (videoEl.videoWidth  - side) / 2,
+//       (videoEl.videoHeight - side) / 2,
+//       side, side,
+//       0, 0, ROI, ROI
+//     );
+
+//     if (dc.readyState === 'open') {
+//       dc.send(JSON.stringify({ fid: fid++, ts: Date.now() / 1000 }));
+//     }
+//     requestAnimationFrame(draw);
+//   };
+//   draw();
+
+//   const cStream = canvasEl.captureStream(30);
+//   cStream.getTracks().forEach((track) => {
+//     console.log(new Date().toLocaleTimeString(), '➕ client to server WebRTC 트랙 추가됨', cStream);
+//     pc.addTrack(track, cStream);
+//   });
+// }
 

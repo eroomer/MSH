@@ -6,28 +6,29 @@ import asyncio, json, time, aioconsole, websockets
 from aiohttp import web
 from aiortc import (
     RTCPeerConnection, RTCSessionDescription, RTCConfiguration,
-    VideoStreamTrack, RTCIceServer
+    VideoStreamTrack, RTCIceServer, RTCIceCandidate
 )
 
 # ────── settings ─────────────────────────────────────────────────────
 STUN_URL      = "stun:stun.l.google.com:19302"
 HTTP_PORT     = 5000                     # /connect, /ice-candidate
-HUB_WS_URL    = "ws://172.20.12.102:3001"    # Hub WS (포트 3001 분리)
+HUB_WS_URL    = "ws://localhost:3001"    # Hub WS (포트 3001 분리)
 
 # ────── globals ──────────────────────────────────────────────────────
 stun_cfg  = RTCConfiguration(iceServers=[RTCIceServer(urls=STUN_URL)])
-pcs: dict[str, RTCPeerConnection] = {}         # clientId → pc
+pcs: dict[str, RTCPeerConnection] = {}         # socketId → pc
+iceQueue: dict[str, list[dict]] = {}           # 클라이언트와의 ICE 후보 저장
 hub        = None                              # websockets connection
 override   = {"x": 0.5, "y": 0.0, "blink": False}
 
 # ────── helpers ──────────────────────────────────────────────────────
-async def send_result(cid: str, fid: int):
+async def send_result(sid: str, fid: int):
     """매 프레임 gaze/blink 결과를 Hub로 push"""
     global hub
     if not hub:
         return                                # 아직 Hub에 안 붙었으면 skip
     payload = {
-        "clientId":  cid,
+        "socketId":  sid,
         "frameId":   fid,
         "timestamp": int(time.time() * 1000),
         "gaze":      {"x": override["x"], "y": override["y"]},
@@ -41,30 +42,33 @@ async def send_result(cid: str, fid: int):
 
 class Receiver(VideoStreamTrack):
     """클라이언트 비디오를 그대로 패스하면서 결과 전송"""
-    def __init__(self, src: VideoStreamTrack, cid: str):
+    def __init__(self, src: VideoStreamTrack, sid: str):
         super().__init__()
-        self.src, self.cid, self.fid = src, cid, 0
+        self.src, self.sid, self.fid = src, sid, 0
     async def recv(self):
         frame = await self.src.recv()
         self.fid += 1
-        asyncio.create_task(send_result(self.cid, self.fid))
+        asyncio.create_task(send_result(self.sid, self.fid))
         return frame
 
 # ────── HTTP handlers ────────────────────────────────────────────────
 async def http_connect(request):
     body = await request.json()
-    cid, sdp, typ = body["clientId"], body["sdp"], body.get("type", "offer")
+    sid, sdp, typ = body["socketId"], body["sdp"], body["type"]
 
     pc = RTCPeerConnection(configuration=stun_cfg)
-    pcs[cid] = pc
+    pcs[sid] = pc
 
     @pc.on("track")
     def on_track(track):
         if track.kind == "video":
-            print(f"🎥 video track from {cid}")
-            pc.addTrack(Receiver(track, cid))
+            print(f"🎥 video track from {sid}")
+            pc.addTrack(Receiver(track, sid))
 
     await pc.setRemoteDescription(RTCSessionDescription(sdp=sdp, type=typ))
+    for candidate in iceQueue.pop(sid, []):
+        await pc.addIceCandidate(candidate)
+
     await pc.setLocalDescription(await pc.createAnswer())
     return web.json_response({
         "sdp":  pc.localDescription.sdp,
@@ -72,7 +76,52 @@ async def http_connect(request):
     })
 
 async def http_ice(request):
-    return web.Response(text="skipped")
+    body = await request.json()
+    sid, ice = body["socketId"], body["candidate"]
+    # candidate 파싱
+    candidate_str = ice["candidate"]
+    fields = candidate_str.split()
+
+    candidate = RTCIceCandidate(
+        foundation=fields[0].split(":")[1],
+        component=int(fields[1]),
+        protocol=fields[2].lower(),
+        priority=int(fields[3]),
+        ip=fields[4],
+        port=int(fields[5]),
+        type=fields[7],
+        sdpMid=ice.get("sdpMid"),
+        sdpMLineIndex=ice.get("sdpMLineIndex")
+    )
+
+    pc = pcs.get(sid)
+    if pc and pc.remoteDescription is not None:
+        await pc.addIceCandidate(candidate)
+    else:
+        if sid not in iceQueue:
+            iceQueue[sid] = []
+        iceQueue[sid].append(candidate)
+    return web.Response(text="ok")
+
+async def http_disconnect(request):
+    body = await request.json()
+    sid = body["socketId"]
+    
+    # pcs에서 제거
+    pc = pcs.pop(sid, None)
+    # 관련 리소스 제거
+    if pc:
+        for sender in pc.getSenders():
+            track = sender.track
+            if track:
+                track.stop()
+        if pc.connectionState != "closed":
+            await pc.close()
+    # ICE 후보 큐 제거
+    iceQueue.pop(sid, None)
+    print(f"🎥 socket disconnected, 리소스 제거 {sid}")
+
+    return web.Response(text="disconnected")
 
 # ────── background tasks ─────────────────────────────────────────────
 async def hub_ws_loop():
@@ -109,6 +158,7 @@ async def stdin_loop():
 async def main():
     app = web.Application()
     app.router.add_post("/connect",       http_connect)
+    app.router.add_post("/disconnect",    http_disconnect)
     app.router.add_post("/ice-candidate", http_ice)
 
     runner = web.AppRunner(app); await runner.setup()
