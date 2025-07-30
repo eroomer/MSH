@@ -97,6 +97,10 @@ function GamePage() {
     };
   }, [roomId]);
 
+  const startbutton = () => {
+    socket.emit(SOCKET_EVENTS.STATE_READY);
+  };
+
   return (
     <div>
       <h2>📞 WebRTC Call - 방 ID: {roomId}  
@@ -110,6 +114,9 @@ function GamePage() {
           <canvas ref={myCanvasRef} width={640} height={480} style={{ width: '100%', height: 'auto' }} />
         </div>
         <div style={{ marginTop: 10 }}>
+        <button onClick={startbutton}>
+          READY
+        </button>
           <>
             gaze {gaze[0].toFixed(2)}, {gaze[1].toFixed(2)} / blink {blink ? '🙈' : '👀'}
           </>
