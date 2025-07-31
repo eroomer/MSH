@@ -178,7 +178,7 @@ function GamePage() {
       }, 33); // 약 30fps로 1초간 회전
 
       return () => clearInterval(interval);
-    }  
+    }
   }, [skillEffect]);
 
   useEffect(() => {
