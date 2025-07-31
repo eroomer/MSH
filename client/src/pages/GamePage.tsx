@@ -4,9 +4,19 @@ import { socket } from '../libs/socket';           // 소켓 전역 변수
 import { SOCKET_EVENTS } from '../../../shared/socketEvents';
 import { useUser } from '../contexts/UserContext';
 import { createPeerConnection, createGPUConnection } from '../libs/webrtc';  // WebRTC 연결 객체 생성
-import { drawVideoToCanvas } from '../libs/canvas/drawVideoToCanvas'; // Video -> Canvas 복사 함수
+import { drawVideoToCanvas, drawRemoteVideoToCanvas } from '../libs/canvas/drawVideoToCanvas'; // Video -> Canvas 복사 함수
+import { useUser } from '../contexts/UserContext';
+import '../App.css';
+
+type VideoEffectState = {
+  flip?: boolean;
+  rotate?: number; // degree, 0 ~ 360까지
+  lens?: boolean;
+  // ...더 추가 가능
+};
 
 function GamePage() {
+  const { username } = useUser();
   const { roomId } = useParams();
   const navigate = useNavigate();
 
@@ -15,6 +25,10 @@ function GamePage() {
   const [blink, setBlink] = useState(false);      // 감음?
 
   const [gameState, setGameState] = useState<'waiting' | 'ready' | 'game' | 'win' | 'lose'>('waiting'); // 게임 state
+  const [skillEffect, setSkillEffect] = useState<'none' | 'flash' | 'dempsey_roll' | 'spin'>('none'); // 게임 state
+  const [effectState, setEffectState] = useState<VideoEffectState>({});
+  const effectStateRef = useRef<VideoEffectState>({});
+
   const [countdown, setCountdown] = useState<number | null>(null); // null이면 표시 안함
 
   const pcPeer = useRef<RTCPeerConnection | null>(null);     // 상대 클라이언트와의 WebRTC 연결 객체
@@ -30,9 +44,7 @@ function GamePage() {
   const remoteCanvasRef = useRef<HTMLCanvasElement>(null);  // 상대방 비디오 스트림을 복사본 + 효과 적용한 실제 표시 화면
 
   const roiCanvasRef = useRef<HTMLCanvasElement>(null);     // 시선 추적 로직에 사용할 ROI 캔버스
-  const { username } = useUser();
 
-  ////dot
   const dotRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -96,7 +108,7 @@ function GamePage() {
   
     if (remoteVideoRef.current && remoteCanvasRef.current) {
       console.log('상대 비디오 스트림 복사');
-      drawVideoToCanvas(remoteVideoRef.current, remoteCanvasRef.current);
+      drawRemoteVideoToCanvas(remoteVideoRef.current, remoteCanvasRef.current, () => effectStateRef.current);
     }
 
     return () => {
@@ -106,28 +118,113 @@ function GamePage() {
     };
   }, [roomId]);
 
+  useEffect(() => {
+    if (skillEffect === 'flash') {
+      if (skillEffect === 'flash') {
+        const timer = setTimeout(() => {
+          setSkillEffect('none');  // 상태를 초기화하여 오버레이 제거
+        }, 3000); // fadeOut과 동일한 시간
+        return () => clearTimeout(timer);
+      }
+    }
+    else if (skillEffect === 'dempsey_roll') {
+      const canvas = remoteCanvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.save();
+
+      let sub_counter = 0;
+      const sub_interval = setInterval(() => {
+        ctx.fillStyle = 'rgba(0,0,0,0)';
+        ctx.globalAlpha = 0.1;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        sub_counter += 1;
+        if (sub_counter >= 30) { // 잔상 생성
+          clearInterval(sub_interval);
+          ctx.restore();
+        }
+      }, 100);
+
+      let counter = 0;
+      const interval = setInterval(() => {
+        setEffectState(prev => ({
+          ...prev,
+          flip: !prev.flip
+        }));
+        counter++;
+        if (counter >= 15) {
+          clearInterval(interval);
+          setEffectState(prev => ({
+            ...prev,
+            flip: false
+          }));
+          setSkillEffect('none');
+        }
+      }, 200);
+      return () => clearInterval(interval); // 정리
+    }
+    else if (skillEffect === 'spin') {
+      let angle = 0;
+      const step = 360 / 30; // 30프레임 동안 360도 회전
+      const interval = setInterval(() => {
+        angle += step;
+        if (angle >= 360) {
+          setEffectState((prev) => ({ ...prev, rotate: 0 }));
+          setSkillEffect('none');
+          clearInterval(interval);
+        } else {
+          setEffectState((prev) => ({ ...prev, rotate: angle }));
+        }
+      }, 33); // 약 30fps로 1초간 회전
+
+      return () => clearInterval(interval);
+    }  
+  }, [skillEffect]);
+
+  useEffect(() => {
+    effectStateRef.current = effectState;
+  }, [effectState]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && gameState === 'game') {
+        e.preventDefault(); // 스크롤 방지
+        socket.emit(SOCKET_EVENTS.SKILL_USED); // 허브 서버로 메시지 전송
+        console.log('🧠 스킬 사용: USE_SKILL 이벤트 전송');
+      }
+    };
+  
+    window.addEventListener('keydown', handleKeyDown);
+  
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [gameState]);
+  
   const readybutton = () => {
-    console.log('레디 함');
+    console.log('버튼 누름');
     socket.emit(SOCKET_EVENTS.STATE_READY);
     setGameState('ready');
+    //setSkillEffect('spin');
   };
 
   return (
     <div style={{ width: '100vw',
-    height: 'calc(100vw * 9 / 16)', padding: '20px', boxSizing: 'border-box', backgroundColor: '#1e1e1e', position: 'relative', overflow: 'hidden', }}>
-      <div
-        ref={dotRef}
-        style={{
-          position: 'absolute',
-          width: 30,
-          height: 30,
-          borderRadius: '50%',
-          background: '#dd1e1e6e',
-          transform: 'translate(-50%, -50%)', // 중앙 정렬
-          pointerEvents: 'none',
-          zIndex: 1000,
-        }}
-      />
+      height: 'calc(100vw * 9 / 16)', padding: '20px', boxSizing: 'border-box', backgroundColor: '#1e1e1e', position: 'relative', overflow: 'hidden', }}>
+        <div
+          ref={dotRef}
+          style={{
+            position: 'absolute',
+            width: 30,
+            height: 30,
+            borderRadius: '50%',
+            background: '#dd1e1e6e',
+            transform: 'translate(-50%, -50%)', // 중앙 정렬
+            pointerEvents: 'none',
+            zIndex: 1000,
+          }}
+        />
       <h2 style={{ color: 'white', textAlign: 'center', marginBottom: '20px' }}>
         📞 WebRTC Call - 방 ID: {roomId}
         <canvas ref={roiCanvasRef} width={256} height={256} style={{ position: 'absolute', width: 0, height: 0, opacity: 0 }} />
@@ -207,22 +304,25 @@ function GamePage() {
           <h2 style={{ color: 'white' }}>상대 화면</h2>
           <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }} />
           <canvas ref={remoteCanvasRef} width={640} height={480} style={{ width: '100%', height: 'auto', borderRadius: '8px' }} />
+          {skillEffect === 'flash' && (
+            <div className="flash-overlay" />
+          )}
         </div>
       </div>
-      {countdown !== null && (
-        <div style={{
-          position: 'absolute',
-          top: '40%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          fontSize: '5rem',
-          color: 'white',
-          fontWeight: 'bold',
-          zIndex: 1000,
-        }}>
-          {countdown}
-        </div>
-      )}
+        {countdown !== null && (
+          <div style={{
+            position: 'absolute',
+            top: '40%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            fontSize: '5rem',
+            color: 'white',
+            fontWeight: 'bold',
+            zIndex: 1000,
+          }}>
+            {countdown}
+          </div>
+        )}
     </div>
   );
 
@@ -237,6 +337,8 @@ function GamePage() {
       await handleGSEvent(event, payload);
     } else if (event.startsWith('st:')) {
       await handleStateEvent(event, payload);
+    } else if (event.startsWith('skill:')) {
+      handleSkillEvent(event, payload);
     } else {
       console.warn(`[⚠️ Unhandled Event] ${event}`);
     }
@@ -424,6 +526,23 @@ function GamePage() {
         break;
     }
   }
+  function handleSkillEvent(event: string, payload: any) {
+    switch (event) {
+      case SOCKET_EVENTS.SKILL_RECEIVED:
+        {const validSkills = ['none', 'flash', 'dempsey_roll', 'spin'] as const;
+        type SkillEffect = typeof validSkills[number];
+
+        console.log('상대가 스킬 사용함');
+        const { skill } = payload as { skill: string };
+        if (validSkills.includes(skill as SkillEffect)) {
+          setSkillEffect(skill as SkillEffect);
+        } else {
+          console.warn('알 수 없는 스킬:', skill);
+        }
+        break;}
+    }
+  }
+
 }
 
 
