@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { socket } from '../libs/socket';           // 소켓 전역 변수
 import { SOCKET_EVENTS } from '../../../shared/socketEvents';
+import { useUser } from '../contexts/UserContext';
 import { createPeerConnection, createGPUConnection } from '../libs/webrtc';  // WebRTC 연결 객체 생성
 import { drawVideoToCanvas } from '../libs/canvas/drawVideoToCanvas'; // Video -> Canvas 복사 함수
 
@@ -29,12 +30,13 @@ function GamePage() {
   const remoteCanvasRef = useRef<HTMLCanvasElement>(null);  // 상대방 비디오 스트림을 복사본 + 효과 적용한 실제 표시 화면
 
   const roiCanvasRef = useRef<HTMLCanvasElement>(null);     // 시선 추적 로직에 사용할 ROI 캔버스
+  const { username } = useUser();
 
   useEffect(() => {
     // 소켓 이벤트 처리
     socket.on('connect', () => {
       console.log(`[${socket.id}] ✅ WebSocket 연결됨`);
-      socket.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId });
+      socket.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId, username });
       console.log(`[${socket.id}] ✅ room: ${roomId} 입장 신청`);
     });
     socket.on('disconnect', async () => {
