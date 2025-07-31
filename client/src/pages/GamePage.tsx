@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { socket } from '../libs/socket';           // 소켓 전역 변수
 import { SOCKET_EVENTS } from '../../../shared/socketEvents';
+import { useUser } from '../contexts/UserContext';
 import { createPeerConnection, createGPUConnection } from '../libs/webrtc';  // WebRTC 연결 객체 생성
 import { drawVideoToCanvas, drawRemoteVideoToCanvas } from '../libs/canvas/drawVideoToCanvas'; // Video -> Canvas 복사 함수
-import { useUser } from '../contexts/UserContext';
 import '../App.css';
 
 type VideoEffectState = {
