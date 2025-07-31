@@ -32,5 +32,8 @@ export const SOCKET_EVENTS = {
     STATE_GAME: 'st:game',
     STATE_WIN: 'st:win',
     STATE_LOSE: 'st:lose',
+
+    SKILL_USED: 'skill:used',
+    SKILL_RECEIVED: 'skill:received'
     // ... 필요에 따라 추가
   } as const;

@@ -73,19 +73,19 @@ io.on('connection', async (socket) => {
         sessions.delete(socket.id);
 
         // GPU에 연결 종료 알림 -> GPU가 WebRTC 연결 해제
-        fetch(`${GPU_HTTP}/disconnect`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ socketId: socket.id })
-        }).then(response => {
-            if (response.ok) {
-                console.log(`[Server] GPU 서버 disconnect 요청 성공: ${socket.id}`);
-            } else {
-                console.error(`[Server] GPU 서버 disconnect 요청 실패 (${response.status}): ${response.statusText}`);
-            }
-        }).catch(error => {
-            console.error(`[Server] GPU 서버 disconnect 요청 중 오류 발생: ${error}`);
-        });
+        // fetch(`${GPU_HTTP}/disconnect`, {
+        //     method: 'POST',
+        //     headers: { 'Content-Type': 'application/json' },
+        //     body: JSON.stringify({ socketId: socket.id })
+        // }).then(response => {
+        //     if (response.ok) {
+        //         console.log(`[Server] GPU 서버 disconnect 요청 성공: ${socket.id}`);
+        //     } else {
+        //         console.error(`[Server] GPU 서버 disconnect 요청 실패 (${response.status}): ${response.statusText}`);
+        //     }
+        // }).catch(error => {
+        //     console.error(`[Server] GPU 서버 disconnect 요청 중 오류 발생: ${error}`);
+        // });
 
         // 같은 방의 클라이언트에게 알림 -> WebRTC 연결 해제
         const roomId = socket.data.roomId;
@@ -105,7 +105,7 @@ async function handleSocketEvent(socket: Socket, event: string, payload: any) {
     } else if (event.startsWith('c2c:')) {
         handleC2CEvent(socket, event, payload);
     } else if (event.startsWith('c2g:')) {
-        await handleC2GEvent(socket, event, payload);
+        //await handleC2GEvent(socket, event, payload);
     } else {
         console.warn(`[⚠️ Unhandled Event] ${event}`);
     }
