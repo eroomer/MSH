@@ -322,6 +322,41 @@ function GamePage() {
             {countdown}
           </div>
         )}
+        {(gameState === 'win' || gameState === 'lose') && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 2000,
+          }}>
+            <h1 style={{ color: 'white', fontSize: '4rem', marginBottom: '20px' }}>
+              {gameState === 'win' ? '🏆 승리!' : '💀 패배...'}
+            </h1>
+            <button
+              onClick={() => {
+                setGameState('waiting');
+              }}
+              style={{
+                padding: '12px 24px',
+                fontSize: '1.2rem',
+                backgroundColor: '#4f46e5',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              한번 더 하기
+            </button>
+          </div>
+        )}
     </div>
   );
 
@@ -500,6 +535,9 @@ function GamePage() {
     switch (event) {
       case SOCKET_EVENTS.STATE_GAME:
         console.log('state game 수신');
+        document.documentElement.requestFullscreen().catch(err => {
+          console.error('전체화면 실패:', err);
+        });
         setCountdown(3);
         setGameState('game');
 
@@ -517,28 +555,33 @@ function GamePage() {
         break;
       case SOCKET_EVENTS.STATE_WIN:
         console.log('state win 수신');
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        }
         setGameState('win');
         break;
       case SOCKET_EVENTS.STATE_LOSE:
         console.log('state lose 수신');
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        }
         setGameState('lose');
         break;
     }
   }
   function handleSkillEvent(event: string, payload: any) {
     switch (event) {
-      case SOCKET_EVENTS.SKILL_RECEIVED:
-        {const validSkills = ['none', 'flash', 'dempsey_roll', 'spin'] as const;
-        type SkillEffect = typeof validSkills[number];
+      case SOCKET_EVENTS.SKILL_RECEIVED: {
+          const validSkills = ['flash', 'dempsey_roll', 'spin'] as const;
 
-        console.log('상대가 스킬 사용함');
-        const { skill } = payload as { skill: string };
-        if (validSkills.includes(skill as SkillEffect)) {
-          setSkillEffect(skill as SkillEffect);
-        } else {
-          console.warn('알 수 없는 스킬:', skill);
-        }
-        break;}
+        console.log('상대가 스킬 사용함 (랜덤 발동)');
+      
+        const randomIndex = Math.floor(Math.random() * validSkills.length);
+        const randomSkill = validSkills[randomIndex];
+
+        setSkillEffect(randomSkill);
+        break;
+      }
     }
   }
 
