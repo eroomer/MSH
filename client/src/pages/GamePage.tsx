@@ -5,7 +5,6 @@ import { SOCKET_EVENTS } from '../../../shared/socketEvents';
 import { useUser } from '../contexts/UserContext';
 import { createPeerConnection, createGPUConnection } from '../libs/webrtc';  // WebRTC 연결 객체 생성
 import { drawVideoToCanvas, drawRemoteVideoToCanvas } from '../libs/canvas/drawVideoToCanvas'; // Video -> Canvas 복사 함수
-import { useUser } from '../contexts/UserContext';
 import '../App.css';
 
 type VideoEffectState = {
@@ -528,18 +527,17 @@ function GamePage() {
   }
   function handleSkillEvent(event: string, payload: any) {
     switch (event) {
-      case SOCKET_EVENTS.SKILL_RECEIVED:
-        {const validSkills = ['none', 'flash', 'dempsey_roll', 'spin'] as const;
-        type SkillEffect = typeof validSkills[number];
+      case SOCKET_EVENTS.SKILL_RECEIVED: {
+          const validSkills = ['flash', 'dempsey_roll', 'spin'] as const;
 
-        console.log('상대가 스킬 사용함');
-        const { skill } = payload as { skill: string };
-        if (validSkills.includes(skill as SkillEffect)) {
-          setSkillEffect(skill as SkillEffect);
-        } else {
-          console.warn('알 수 없는 스킬:', skill);
-        }
-        break;}
+        console.log('상대가 스킬 사용함 (랜덤 발동)');
+      
+        const randomIndex = Math.floor(Math.random() * validSkills.length);
+        const randomSkill = validSkills[randomIndex];
+
+        setSkillEffect(randomSkill);
+        break;
+      }
     }
   }
 
