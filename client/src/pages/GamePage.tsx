@@ -10,7 +10,6 @@ import '../App.css';
 type VideoEffectState = {
   flip?: boolean;
   rotate?: number; // degree, 0 ~ 360까지
-  lens?: boolean;
   // ...더 추가 가능
 };
 
@@ -135,7 +134,7 @@ function GamePage() {
 
       let sub_counter = 0;
       const sub_interval = setInterval(() => {
-        ctx.fillStyle = 'rgba(0,0,0,0)';
+        ctx.fillStyle = 'white';
         ctx.globalAlpha = 0.1;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         sub_counter += 1;
@@ -187,8 +186,18 @@ function GamePage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && gameState === 'game') {
+      if (e.code === 'Space') {
         e.preventDefault(); // 스크롤 방지
+
+        // const validSkills = ['flash', 'dempsey_roll', 'spin'] as const;
+
+        // console.log('상대가 스킬 사용함 (랜덤 발동)');
+      
+        // const randomIndex = Math.floor(Math.random() * validSkills.length);
+        // const randomSkill = validSkills[randomIndex];
+
+        // setSkillEffect(randomSkill);
+
         socket.emit(SOCKET_EVENTS.SKILL_USED); // 허브 서버로 메시지 전송
         console.log('🧠 스킬 사용: USE_SKILL 이벤트 전송');
       }
@@ -225,7 +234,7 @@ function GamePage() {
           }}
         />
       <h2 style={{ color: 'white', textAlign: 'center', marginBottom: '20px' }}>
-        📞 WebRTC Call - 방 ID: {roomId}
+        MSH - 방 ID: {roomId}
         <canvas ref={roiCanvasRef} width={256} height={256} style={{ position: 'absolute', width: 0, height: 0, opacity: 0 }} />
       </h2>
 
