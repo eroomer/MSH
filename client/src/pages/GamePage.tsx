@@ -21,9 +21,10 @@ function GamePage() {
   const [gaze,  setGaze]  = useState([0, 0]);    // 시선위치
   const [gazeRaw,  setGazeRaw]  = useState([0, 0]);    // 시선위치
   const [blink, setBlink] = useState(false);      // 감음?
+  const [karinaPos, setKarinaPos] = useState(100);
 
   const [gameState, setGameState] = useState<'waiting' | 'ready' | 'game' | 'win' | 'lose'>('waiting'); // 게임 state
-  const [skillEffect, setSkillEffect] = useState<'none' | 'flash' | 'dempsey_roll' | 'spin'>('none'); // 게임 state
+  const [skillEffect, setSkillEffect] = useState<'none' | 'flash' | 'dempsey_roll' | 'spin' | 'karina'> ('none'); // 게임 state
   const [effectState, setEffectState] = useState<VideoEffectState>({});
   const effectStateRef = useRef<VideoEffectState>({});
 
@@ -178,6 +179,22 @@ function GamePage() {
 
       return () => clearInterval(interval);
     }
+    else if (skillEffect === 'karina') {
+      setKarinaPos(100);                // 시작 위치 (오른쪽 밖)
+      const speed = 1.5;                // %/frame   → 값이 클수록 빨라집니다
+      const interval = setInterval(() => {
+        setKarinaPos(prev => {
+          const next = prev - speed;
+          if (next < -20) {             // 왼쪽 밖으로 완전히 사라지면 종료
+            clearInterval(interval);
+            setSkillEffect('none');
+            return -20;
+          }
+          return next;
+        });
+      }, 16);                           // ~60fps
+      return () => clearInterval(interval);
+    }
   }, [skillEffect]);
 
   useEffect(() => {
@@ -186,7 +203,7 @@ function GamePage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
+      if (e.code === 'Space' && gameState === "game") {
         e.preventDefault(); // 스크롤 방지
 
         // const validSkills = ['flash', 'dempsey_roll', 'spin'] as const;
@@ -233,6 +250,21 @@ function GamePage() {
             zIndex: 1000,
           }}
         />
+        {skillEffect === 'karina' && (
+          <img
+            src="/assets/karina.png"
+            alt="karina"
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: `${karinaPos}%`,
+              transform: 'translate(-50%, -50%)',
+              width: '220px',          // 원하는 크기
+              pointerEvents: 'none',   // 클릭 막기
+              userSelect: 'none',
+            }}
+          />
+        )}
       <h2 style={{ color: 'white', textAlign: 'center', marginBottom: '20px' }}>
         MSH - 방 ID: {roomId}
         <canvas ref={roiCanvasRef} width={256} height={256} style={{ position: 'absolute', width: 0, height: 0, opacity: 0 }} />
@@ -581,7 +613,7 @@ function GamePage() {
   function handleSkillEvent(event: string, payload: any) {
     switch (event) {
       case SOCKET_EVENTS.SKILL_RECEIVED: {
-          const validSkills = ['flash', 'dempsey_roll', 'spin'] as const;
+          const validSkills = ['flash', 'dempsey_roll', 'spin', 'karina'] as const;
 
         console.log('상대가 스킬 사용함 (랜덤 발동)');
       
