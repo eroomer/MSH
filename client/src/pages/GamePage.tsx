@@ -32,6 +32,9 @@ function GamePage() {
   const roiCanvasRef = useRef<HTMLCanvasElement>(null);     // 시선 추적 로직에 사용할 ROI 캔버스
   const { username } = useUser();
 
+  ////dot
+  const dotRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     // 소켓 이벤트 처리
     socket.on('connect', () => {
@@ -110,7 +113,21 @@ function GamePage() {
   };
 
   return (
-    <div style={{ height: '100vh', padding: '20px', boxSizing: 'border-box', backgroundColor: '#1e1e1e' }}>
+    <div style={{ width: '100vw',
+    height: 'calc(100vw * 9 / 16)', padding: '20px', boxSizing: 'border-box', backgroundColor: '#1e1e1e', position: 'relative', overflow: 'hidden', }}>
+      <div
+        ref={dotRef}
+        style={{
+          position: 'absolute',
+          width: 30,
+          height: 30,
+          borderRadius: '50%',
+          background: '#dd1e1e6e',
+          transform: 'translate(-50%, -50%)', // 중앙 정렬
+          pointerEvents: 'none',
+          zIndex: 1000,
+        }}
+      />
       <h2 style={{ color: 'white', textAlign: 'center', marginBottom: '20px' }}>
         📞 WebRTC Call - 방 ID: {roomId}
         <canvas ref={roiCanvasRef} width={256} height={256} style={{ position: 'absolute', width: 0, height: 0, opacity: 0 }} />
@@ -370,6 +387,10 @@ function GamePage() {
         setGaze([gaze.x, gaze.y]);
         setGazeRaw([gazeRaw.x, gazeRaw.y]);
         setBlink(blink);
+        const dot = dotRef.current;
+        if (!dot) return;
+        dot.style.left = `${gaze.x * 100}%`;
+        dot.style.top  = `${gaze.y * 100}%`;
       }
     }
   }

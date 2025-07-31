@@ -228,8 +228,8 @@ export default function CalibrationPage() {
                     left: `${currentPoint.x * 100}%`,
                     top: `${currentPoint.y * 100}%`,
                     transform: 'translate(-50%, -50%)',
-                    width: '50px',
-                    height: '50px',
+                    width: '20px',
+                    height: '20px',
                     zIndex: 1,
                     backgroundColor: 'cyan',
                     borderRadius: '50%',
@@ -243,7 +243,7 @@ export default function CalibrationPage() {
                   transform: 'translate(-50%, -50%)', // 점 위로 50px 오프셋
                   zIndex: 2,
                   color: 'black',
-                  fontSize: '1.5rem',
+                  fontSize: '0.5rem',
                 }}>
                   {timeLeft}
                 </div>
